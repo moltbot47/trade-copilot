@@ -12,14 +12,32 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import auth, bots, calculator, dashboard, subscriptions, tradelocker, users, webhooks
+from app.api import (
+    auth,
+    bots,
+    calculator,
+    dashboard,
+    subscriptions,
+    tradelocker,
+    users,
+    webhooks,
+)
+from app.api import health as health_api
+from app.api import metrics as metrics_api
 from app.config import get_settings
+from app.core.logging import configure_logging
 from app.core.rate_limit import limiter
+from app.core.sentry import init_sentry
 from app.db.database import Base, SessionLocal, engine
+from app.middleware.request_logging import RequestLoggingMiddleware
 from app.strategies import api as strategy_api
+from app.ws.server import router as ws_router
 
+# Configure structured logging + Sentry before app instantiation so
+# startup messages flow through the JSON formatter.
+configure_logging()
+init_sentry()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 def _seed_starter_bots() -> None:
@@ -116,11 +134,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+# Request logging — last so we capture the full final status code.
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -128,6 +143,10 @@ async def global_exception_handler(_, exc: Exception):
     logger.exception("unhandled: %s", exc)
     return JSONResponse(status_code=500, content={"detail": "internal_error"})
 
+
+# Operational endpoints (no /api prefix — standard for liveness/metrics)
+app.include_router(health_api.router)   # /health, /health/detail
+app.include_router(metrics_api.router)  # /metrics
 
 # Mount routers under /api
 app.include_router(auth.router, prefix="/api")
@@ -139,3 +158,6 @@ app.include_router(tradelocker.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(strategy_api.router, prefix="/api")
 app.include_router(calculator.router, prefix="/api")
+
+# WebSocket endpoint — protocol uses /ws (no /api prefix per WS_PROTOCOL.md).
+app.include_router(ws_router)

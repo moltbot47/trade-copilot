@@ -1,4 +1,9 @@
-"""Standalone seeder. Idempotently inserts the 3 starter bots into the DB."""
+"""Standalone seeder. Idempotently inserts the 3 starter bots into the DB.
+
+Each new Bot row gets a per-bot ``webhook_secret`` generated automatically
+via ``Bot._generate_webhook_secret`` (256-bit url-safe). Authenticated
+users can fetch + rotate secrets via /api/bots/{slug}/webhook[/rotate].
+"""
 from __future__ import annotations
 
 from app.db.database import Base, SessionLocal, engine
@@ -45,9 +50,16 @@ def main() -> None:
     inserted = 0
     try:
         for cfg in SEED:
-            if not db.query(Bot).filter(Bot.slug == cfg["slug"]).first():
+            existing = db.query(Bot).filter(Bot.slug == cfg["slug"]).first()
+            if existing is None:
+                # Bot.webhook_secret default factory fires here (per-row).
                 db.add(Bot(**cfg))
                 inserted += 1
+            elif not getattr(existing, "webhook_secret", None):
+                # Heal a row that pre-dates the webhook_secret column.
+                from app.db.models import _generate_webhook_secret
+
+                existing.webhook_secret = _generate_webhook_secret()
         db.commit()
     finally:
         db.close()

@@ -42,6 +42,24 @@ from app.strategies.position_monitor import PositionMonitor
 logger = logging.getLogger(__name__)
 
 
+def _ws_publish(channel: str, user_id: int, payload: dict) -> None:
+    """Best-effort WS event-bus publish; never raise back into runner.
+
+    Wave 3A's event_bus may not yet be wired up. Failure here is silent
+    so that strategy execution is never blocked by the WS layer.
+    """
+    try:
+        from app.ws.event_bus import event_bus
+    except Exception:
+        return
+    try:
+        result = event_bus.publish(channel, user_id, payload)
+        if asyncio.iscoroutine(result):
+            asyncio.ensure_future(result)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("ws publish failed channel=%s: %s", channel, exc)
+
+
 def tf_seconds(tf: str) -> int:
     if tf.endswith("m"):
         return int(tf[:-1]) * 60
@@ -203,6 +221,13 @@ class StrategyRunner:
         # Update last_tick_at
         self._touch_tick(len(outcomes))
 
+        # Push a strategy snapshot to subscribed users on every tick. Cheap
+        # query (state row + last 20 outcomes); skipped silently on error.
+        try:
+            self._publish_strategy_snapshot()
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("strategy snapshot publish failed: %s", exc)
+
         # Feedback on every Nth close
         if outcomes:
             db = self.db_session_factory()
@@ -257,6 +282,23 @@ class StrategyRunner:
             db.flush()  # get id
 
             users = self._load_users(db)
+            # Emit per-user "signals" event for every subscriber regardless
+            # of whether they have TL creds (so paper-mode users get fed too).
+            signal_event = {
+                "bot_id": self.bot_id,
+                "symbol": sig.symbol,
+                "side": sig.side,
+                "confidence": sig.forecast_confidence,
+                "drift": sig.forecast_drift,
+                "threshold": sig.threshold,
+                "entry_price": sig.entry_price,
+                "stop_loss": sig.stop_loss,
+                "take_profit": sig.take_profit,
+                "timeframe": self.timeframe,
+            }
+            for u in users:
+                _ws_publish("signals", u.id, signal_event)
+
             for user in users:
                 token = decrypt(user.tradelocker_token) if user.tradelocker_token else None
                 if not token or not user.tradelocker_account_id:
@@ -436,6 +478,102 @@ class StrategyRunner:
         if not self.user_emails:
             return []
         return db.query(User).filter(User.email.in_(self.user_emails), User.is_active.is_(True)).all()
+
+    def _publish_strategy_snapshot(self) -> None:
+        """Build and publish a `strategy:{tf}` event to each subscribed user.
+
+        Sends {state, performance, recent_trades} per WS_PROTOCOL.md.
+        Best-effort — silently skips on any error.
+        """
+        if not self.user_emails:
+            return
+        from app.db.models import PerformanceSnapshot, TradeOutcome
+
+        channel = f"strategy:{self.timeframe}"
+        db = self.db_session_factory()
+        try:
+            state = (
+                db.query(StrategyState)
+                .filter(
+                    StrategyState.bot_id == self.bot_id,
+                    StrategyState.timeframe == self.timeframe,
+                )
+                .first()
+            )
+            state_payload: dict[str, Any] = (
+                {
+                    "bot_id": state.bot_id,
+                    "timeframe": state.timeframe,
+                    "is_running": state.is_running,
+                    "confidence_threshold": state.confidence_threshold,
+                    "max_concurrent": state.max_concurrent,
+                    "paused_until": state.paused_until.isoformat() if state.paused_until else None,
+                    "last_tick_at": state.last_tick_at.isoformat() if state.last_tick_at else None,
+                    "last_signal_at": state.last_signal_at.isoformat() if state.last_signal_at else None,
+                    "last_error": state.last_error,
+                    "started_at": state.started_at.isoformat() if state.started_at else None,
+                }
+                if state is not None
+                else {}
+            )
+
+            perf_row = (
+                db.query(PerformanceSnapshot)
+                .filter(PerformanceSnapshot.bot_id == self.bot_id)
+                .order_by(PerformanceSnapshot.snapshot_at.desc())
+                .first()
+            )
+            perf_payload = (
+                {
+                    "win_rate": perf_row.win_rate,
+                    "profit_factor": perf_row.profit_factor,
+                    "sharpe": perf_row.sharpe,
+                    "avg_r": perf_row.avg_r,
+                    "max_drawdown_pct": perf_row.max_drawdown_pct,
+                    "total_pnl_usd": perf_row.total_pnl_usd,
+                    "total_trades": perf_row.total_trades,
+                    "snapshot_at": perf_row.snapshot_at.isoformat() if perf_row.snapshot_at else None,
+                }
+                if perf_row is not None
+                else None
+            )
+
+            recent_rows = (
+                db.query(TradeOutcome)
+                .filter(
+                    TradeOutcome.bot_id == self.bot_id,
+                    TradeOutcome.timeframe == self.timeframe,
+                )
+                .order_by(TradeOutcome.closed_at.desc())
+                .limit(20)
+                .all()
+            )
+            recent = [
+                {
+                    "id": r.id,
+                    "instrument": r.instrument,
+                    "side": r.side,
+                    "entry_price": r.entry_price,
+                    "exit_price": r.exit_price,
+                    "qty": r.qty,
+                    "pnl_usd": r.pnl_usd,
+                    "r_multiple": r.r_multiple,
+                    "closed_at": r.closed_at.isoformat() if r.closed_at else None,
+                }
+                for r in recent_rows
+            ]
+
+            users = self._load_users(db)
+        finally:
+            db.close()
+
+        snapshot = {
+            "state": state_payload,
+            "performance": perf_payload,
+            "recent_trades": recent,
+        }
+        for u in users:
+            _ws_publish(channel, u.id, snapshot)
 
     def _load_first_authed_user(self) -> Optional[dict]:
         db = self.db_session_factory()

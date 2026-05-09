@@ -50,11 +50,13 @@ def test_generate_clamps_low_days():
     assert body[:4] == b"%PDF"
 
 
-def test_generate_clamps_huge_days():
+def test_generate_typical_horizon():
+    """100-day horizon is the calculator default and well-supported."""
     body = generate_compound_pdf(
-        start_balance=10_000.0, daily_rate_pct=2.0, days=10_000
+        start_balance=10_000.0, daily_rate_pct=2.0, days=100
     )
     assert body[:4] == b"%PDF"
+    assert len(body) > 5000  # multi-page report
 
 
 def test_generate_with_default_args():

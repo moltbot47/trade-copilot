@@ -151,20 +151,34 @@ export default function CalculatorPage() {
             />
           </div>
 
-          <div>
-            <label>daily profit target</label>
-            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", marginBottom: "0.5rem" }}>
+          <div role="group" aria-labelledby="rate-group-label">
+            <span id="rate-group-label" className="dim" style={{
+              display: "block",
+              fontSize: "0.85rem",
+              marginBottom: "0.35rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}>
+              daily profit target
+            </span>
+            <div
+              style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", marginBottom: "0.5rem" }}
+              role="radiogroup"
+              aria-label="Preset daily profit targets"
+            >
               {PRESETS.map((p) => (
                 <button
                   key={p.rate}
                   type="button"
+                  role="radio"
+                  aria-checked={dailyRate === p.rate}
                   onClick={() => setDailyRate(p.rate)}
                   className="btn"
                   style={{
                     flex: 1,
                     background: dailyRate === p.rate ? "var(--accent)" : "transparent",
                     color: dailyRate === p.rate ? "#000" : "var(--text)",
-                    border: `1px solid ${dailyRate === p.rate ? "var(--accent)" : "var(--border)"}`,
+                    border: `1px solid ${dailyRate === p.rate ? "var(--accent)" : "var(--border-strong)"}`,
                     padding: "0.5rem",
                     cursor: "pointer",
                     fontSize: "0.82rem",
@@ -176,15 +190,20 @@ export default function CalculatorPage() {
                 </button>
               ))}
             </div>
+            <label htmlFor="custom-rate" className="dim" style={{ fontSize: "0.75rem" }}>
+              custom rate (0.1 – 10%/day)
+            </label>
             <input
+              id="custom-rate"
               type="number"
               min={0.1}
               max={10}
               step={0.1}
               value={dailyRate}
               onChange={(e) => setDailyRate(Number(e.target.value))}
+              aria-describedby="custom-rate-hint"
             />
-            <div className="dim" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>
+            <div id="custom-rate-hint" className="dim" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>
               custom (0.1 – 10%/day)
             </div>
           </div>
@@ -217,7 +236,12 @@ export default function CalculatorPage() {
             {downloading ? "generating..." : "📄 generate report (PDF)"}
           </button>
           {downloadError && (
-            <p className="danger" style={{ margin: 0, fontSize: "0.85rem" }}>
+            <p
+              role="alert"
+              aria-live="assertive"
+              className="danger"
+              style={{ margin: 0, fontSize: "0.85rem" }}
+            >
               error: {downloadError}
             </p>
           )}

@@ -89,12 +89,32 @@ alertcondition(longSig,  title = "Squeeze Long",  message = "Squeeze release lon
 alertcondition(shortSig, title = "Squeeze Short", message = "Squeeze release short")
 
 // ----------------------------- Webhook payload -------------------------------
-// {
-//   "bot_secret": "squeeze-momentum",
-//   "instrument": "{{ticker}}",
-//   "side": "buy",
-//   "entry_price": {{close}},
-//   "stop_loss": {{strategy.position_avg_price}} - 50,
-//   "take_profit": {{strategy.position_avg_price}} + 75,
-//   "base_lot_size": 0.10
-// }
+// See docs/SETUP.md "Securing your TradingView webhooks" for the full guide.
+//
+// (A) Hardened mode (PREFERRED) — point alerts at a signing relay; relay
+//     adds these headers to every forwarded POST:
+//       X-Bot-Slug:          squeeze-momentum
+//       X-Webhook-Timestamp: <unix-seconds>
+//       X-Webhook-Signature: hex(HMAC_SHA256(secret, f"{ts}.{body}"))
+//     Alert message body (no bot_secret needed):
+//
+//     {
+//       "instrument": "{{ticker}}",
+//       "side": "buy",
+//       "entry_price": {{close}},
+//       "stop_loss": {{strategy.position_avg_price}} - 50,
+//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "base_lot_size": 0.10
+//     }
+//
+// (B) Legacy mode (DEPRECATED, server emits WARN log per request):
+//
+//     {
+//       "bot_secret": "squeeze-momentum",
+//       "instrument": "{{ticker}}",
+//       "side": "buy",
+//       "entry_price": {{close}},
+//       "stop_loss": {{strategy.position_avg_price}} - 50,
+//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "base_lot_size": 0.10
+//     }

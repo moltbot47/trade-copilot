@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, getUserEmail } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import EmailGate from "@/components/EmailGate";
 import StrategyStatusBadge from "@/components/StrategyStatusBadge";
 import StrategyControlButton from "@/components/StrategyControlButton";
@@ -17,11 +18,13 @@ import type {
   TradeOutcome,
   EquityPoint,
 } from "@/lib/types";
+import type { StrategyEvent, WsChannel } from "@/lib/ws-types";
 
 const DEFAULT_BOT_ID = 4; // LaT-PFN Momentum (seeded by seed_latpfn_bot.py)
 const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "NAS100", "EURUSD"];
-const POLL_MS_OK = 5_000;
-const POLL_MS_OFFLINE = 10_000;
+// Equity is still REST-fetched on mount + when state changes — there's no
+// dedicated equity channel in the WS protocol v1.
+const EQUITY_REFRESH_MS = 30_000;
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -66,7 +69,9 @@ export default function StrategyPage() {
   const prevPerfRef = useRef<PerformanceSnapshot | null>(null);
 
   const botId = DEFAULT_BOT_ID;
+  const ws = useWebSocket();
 
+  // Initial REST fetch — populates state before first WS push arrives.
   const refresh = async () => {
     try {
       const [statusRes, equityRes] = await Promise.allSettled([
@@ -104,18 +109,61 @@ export default function StrategyPage() {
     }
   };
 
-  // Initial load + polling
+  // Initial load when timeframe changes — single REST call, no polling.
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe]);
 
+  // Subscribe to the strategy channel for live state pushes.
   useEffect(() => {
-    const interval = offline ? POLL_MS_OFFLINE : POLL_MS_OK;
-    const t = setInterval(refresh, interval);
-    return () => clearInterval(t);
+    const channel: WsChannel = timeframe === "1m" ? "strategy:1m" : "strategy:5m";
+    const off = ws.subscribe<StrategyEvent>(channel, (payload) => {
+      prevPerfRef.current = perf;
+      setState(payload.state);
+      setPerf(payload.performance);
+      setRecentTrades(payload.recent_trades || []);
+      setSnapshots(
+        payload.recent_snapshots || (payload.performance ? [payload.performance] : []),
+      );
+      setLastUpdated(new Date());
+      setOffline(false);
+    });
+    return off;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offline, timeframe]);
+  }, [timeframe, ws.subscribe]);
+
+  // WS connection status drives the offline banner.
+  useEffect(() => {
+    if (ws.status === "open") setOffline(false);
+    else if (ws.status === "closed") setOffline(true);
+  }, [ws.status]);
+
+  // Equity has no dedicated WS channel — refresh on a much slower interval
+  // and whenever a trade close event arrives.
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const eq = await api.getStrategyEquity(botId);
+        setEquity(eq.points || []);
+      } catch {
+        // ignore; offline banner already drives UX
+      }
+    }, EQUITY_REFRESH_MS);
+    return () => clearInterval(t);
+  }, [botId]);
+
+  useEffect(() => {
+    const off = ws.subscribe("trades", async () => {
+      try {
+        const eq = await api.getStrategyEquity(botId);
+        setEquity(eq.points || []);
+      } catch {
+        // ignore
+      }
+    });
+    return off;
+  }, [botId, ws.subscribe]);
 
   // Tick "Last updated Xs ago" every second
   useEffect(() => {
@@ -129,32 +177,52 @@ export default function StrategyPage() {
     return `${diff}s ago`;
   }, [lastUpdated, tickNow]);
 
+  const [commandInFlight, setCommandInFlight] = useState(false);
+
   const handleStart = async () => {
     const email = getUserEmail();
     const userEmails = email ? [email] : [];
+    setCommandInFlight(true);
     try {
-      const next = await api.startStrategy(
-        botId,
-        timeframe,
-        DEFAULT_SYMBOLS,
-        userEmails
-      );
+      let next: StrategyState;
+      if (ws.status === "open") {
+        next = await ws.command<StrategyState>("strategy.start", {
+          bot_id: botId,
+          timeframe,
+          symbols: DEFAULT_SYMBOLS,
+          user_emails: userEmails,
+        });
+      } else {
+        next = await api.startStrategy(botId, timeframe, DEFAULT_SYMBOLS, userEmails);
+      }
       setState(next);
       setError(null);
-      refresh();
+      // The WS strategy channel will push the next snapshot — no manual refresh needed.
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setCommandInFlight(false);
     }
   };
 
   const handleStop = async () => {
+    setCommandInFlight(true);
     try {
-      const next = await api.stopStrategy(botId, timeframe);
+      let next: StrategyState;
+      if (ws.status === "open") {
+        next = await ws.command<StrategyState>("strategy.stop", {
+          bot_id: botId,
+          timeframe,
+        });
+      } else {
+        next = await api.stopStrategy(botId, timeframe);
+      }
       setState(next);
       setError(null);
-      refresh();
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setCommandInFlight(false);
     }
   };
 
@@ -192,8 +260,8 @@ export default function StrategyPage() {
             <span className="accent">LaT-PFN Momentum</span>
           </h1>
           <p className="dim" style={{ margin: 0, fontSize: "0.85rem" }}>
-            zero-shot forecasting · self-tuning threshold · auto-refresh{" "}
-            {offline ? "10s (offline)" : "5s"}
+            zero-shot forecasting · self-tuning threshold · live ws stream{" "}
+            {ws.status === "open" ? "(connected)" : `(${ws.status})`}
           </p>
         </div>
 
@@ -240,14 +308,14 @@ export default function StrategyPage() {
             isRunning={!!state?.is_running}
             onStart={handleStart}
             onStop={handleStop}
-            disabled={offline}
+            disabled={offline || commandInFlight}
           />
         </div>
       </header>
 
       {/* Backend offline banner */}
       {offline && (
-        <div className="card" style={{ borderColor: "var(--danger)" }}>
+        <div role="alert" className="card" style={{ borderColor: "var(--danger)" }}>
           <strong className="danger">backend offline.</strong>{" "}
           <span className="dim">
             Cannot reach{" "}
@@ -257,7 +325,7 @@ export default function StrategyPage() {
       )}
 
       {error && !offline && (
-        <div className="card" style={{ borderColor: "var(--warn)" }}>
+        <div role="alert" className="card" style={{ borderColor: "var(--warn)" }}>
           <span className="warn">error:</span>{" "}
           <span className="dim">{error}</span>
         </div>
@@ -286,7 +354,12 @@ export default function StrategyPage() {
             </span>
           )}
         </div>
-        <div className="dim" style={{ fontSize: "0.78rem" }}>
+        <div
+          className="dim"
+          style={{ fontSize: "0.78rem" }}
+          role="status"
+          aria-live="polite"
+        >
           last updated: {lastUpdatedLabel}
           {state?.last_signal_at && (
             <>
@@ -306,6 +379,9 @@ export default function StrategyPage() {
 
       {/* Stats grid */}
       <section
+        aria-live="polite"
+        aria-atomic="false"
+        aria-label="Live performance metrics"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",

@@ -87,7 +87,10 @@ class TradeLockerAccountOut(BaseModel):
 
 # ---------- Webhooks ----------
 class TradingViewSignal(BaseModel):
-    bot_secret: str
+    # `bot_secret` is now OPTIONAL: kept for the deprecated body-secret path
+    # (see app/api/webhooks.py). Hardened mode supplies the bot identity via
+    # the `X-Bot-Slug` header instead, with HMAC signature in `X-Webhook-Signature`.
+    bot_secret: Optional[str] = None
     instrument: str
     side: Literal["buy", "sell"]
     entry_price: Optional[float] = None
@@ -103,6 +106,19 @@ class WebhookResponse(BaseModel):
     status: str
     signal_id: int
     subscribers_notified: int
+
+
+class BotWebhookSecretOut(BaseModel):
+    """Returned only to authenticated owners. Carries the live secret."""
+
+    slug: str
+    webhook_url: str
+    secret: str
+    signature_header_format: str = (
+        "X-Bot-Slug: <slug>; X-Webhook-Timestamp: <unix-seconds>; "
+        "X-Webhook-Signature: hex(HMAC_SHA256(secret, f'{ts}.{body}'))"
+    )
+    max_age_seconds: int = 300
 
 
 # ---------- Dashboard ----------

@@ -80,13 +80,62 @@ def login(
     max_age = settings.SESSION_TTL_DAYS * 24 * 60 * 60
     _set_session_cookie(response, token, max_age)
     logger.info("login: %s (exp=%s)", user.email, expires_at.isoformat())
+
+    # Boot the TradeLocker relay if the user has a stored token.
+    # Best-effort — failures here must not block login.
+    if user.tradelocker_token and user.tradelocker_account_id:
+        try:
+            from app.ws.relay_manager import relay_manager
+
+            relay_manager.start_for_user(user.id)
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("relay_manager.start_for_user skipped: %s", exc)
+
     return LoginResponse(email=user.email, exp=int(expires_at.timestamp()))
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response) -> dict[str, str]:
+def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
     """Clear the session cookie. Always 200 — idempotent."""
     _clear_session_cookie(response)
+
+    # Stop any running TL relay for this user. We resolve the user from
+    # the cookie/header (best-effort) so we don't require auth on logout.
+    try:
+        from app.api.users import _extract_token
+
+        token = _extract_token(request)
+        if token:
+            from app.core.jwt import JWTError, verify_session_token
+
+            try:
+                claims = verify_session_token(token)
+                email = claims.get("sub")
+                if email:
+                    user = db.query(User).filter(User.email == email).first()
+                    if user is not None:
+                        from app.ws.relay_manager import relay_manager
+                        import asyncio
+
+                        try:
+                            asyncio.get_running_loop().create_task(
+                                relay_manager.stop_for_user(user.id)
+                            )
+                        except RuntimeError:
+                            # No running loop (sync context) — schedule via run
+                            try:
+                                asyncio.run(relay_manager.stop_for_user(user.id))
+                            except Exception:
+                                pass
+            except JWTError:
+                pass
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.debug("logout relay-stop skipped: %s", exc)
+
     return {"status": "logged_out"}
 
 

@@ -9,6 +9,7 @@ For an MVP this is sufficient — the runner samples once per bar.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -18,9 +19,47 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
-from app.db.models import Execution, ExecutionStatus, Signal, TradeOutcome, User
+from app.db.models import Execution, Signal, TradeOutcome, User
 
 logger = logging.getLogger(__name__)
+
+
+def _ws_publish_trade(user_id: int, outcome: "TradeOutcome") -> None:
+    """Best-effort publish of a closed trade onto the WS event bus.
+
+    Wave 3A's event_bus may not be live yet — silently no-op on any error.
+    """
+    try:
+        from app.ws.event_bus import event_bus
+    except Exception:
+        return
+    try:
+        payload = {
+            "id": outcome.id,
+            "bot_id": outcome.bot_id,
+            "signal_id": outcome.signal_id,
+            "instrument": outcome.instrument,
+            "side": outcome.side,
+            "timeframe": outcome.timeframe,
+            "entry_price": outcome.entry_price,
+            "exit_price": outcome.exit_price,
+            "qty": outcome.qty,
+            "pnl_usd": outcome.pnl_usd,
+            "r_multiple": outcome.r_multiple,
+            "forecast_drift": outcome.forecast_drift,
+            "forecast_confidence": outcome.forecast_confidence,
+            "threshold_at_entry": outcome.threshold_at_entry,
+            "opened_at": outcome.opened_at.isoformat() if outcome.opened_at else None,
+            "closed_at": outcome.closed_at.isoformat() if outcome.closed_at else None,
+            "hold_seconds": outcome.hold_seconds,
+            "mae": outcome.mae,
+            "mfe": outcome.mfe,
+        }
+        result = event_bus.publish("trades", user_id, payload)
+        if asyncio.iscoroutine(result):
+            asyncio.ensure_future(result)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("ws publish trades failed user=%s: %s", user_id, exc)
 
 
 class PositionMonitor:
@@ -182,6 +221,9 @@ class PositionMonitor:
         )
         db.add(outcome)
         db.commit()
+        # Push closed-trade event onto the WS event bus for the user that
+        # owns this execution. Best-effort — never raises.
+        _ws_publish_trade(ex.user_id, outcome)
         return outcome
 
 

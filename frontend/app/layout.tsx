@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Layout from "@/components/Layout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export const metadata: Metadata = {
   title: "Trade Copilot",
@@ -23,7 +24,9 @@ export default function RootLayout({
         ></script>
       </head>
       <body>
-        <Layout>{children}</Layout>
+        <ErrorBoundary>
+          <Layout>{children}</Layout>
+        </ErrorBoundary>
       </body>
     </html>
   );

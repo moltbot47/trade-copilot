@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, getUserEmail, clearUserEmail } from "@/lib/api";
+import ConnectionStatus from "./ConnectionStatus";
 
 const NAV = [
   { href: "/bots", label: "bots" },
@@ -16,11 +17,17 @@ const NAV = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     setEmail(getUserEmail());
   }, []);
+
+  // Close mobile nav when navigating to a new path
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   const signOut = async () => {
     // Best-effort — even if backend fails, clear client state.
@@ -35,6 +42,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
+
       <header
         style={{
           borderBottom: "1px solid var(--border)",
@@ -56,7 +67,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         >
           [trade-copilot]
         </Link>
+
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-expanded={navOpen}
+          aria-controls="primary-nav"
+          aria-label={navOpen ? "Close menu" : "Open menu"}
+          onClick={() => setNavOpen((v) => !v)}
+        >
+          {navOpen ? "✕" : "☰"}
+        </button>
+
         <nav
+          id="primary-nav"
+          className={`nav-links${navOpen ? " is-open" : ""}`}
           style={{ display: "flex", gap: "1rem", flex: 1, flexWrap: "wrap" }}
           aria-label="primary"
         >
@@ -79,7 +104,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.85rem" }}>
+        <div
+          className="header-user-bar"
+          style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.85rem" }}
+        >
+          <ConnectionStatus />
           {email ? (
             <>
               <span className="dim">user:</span>
@@ -88,10 +117,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 onClick={signOut}
                 style={{
                   background: "transparent",
-                  border: "1px solid var(--border)",
+                  border: "1px solid var(--border-strong)",
                   color: "var(--text-dim)",
-                  padding: "0.25rem 0.5rem",
+                  padding: "0.45rem 0.75rem",
                   cursor: "pointer",
+                  minHeight: 44,
                 }}
               >
                 sign out
@@ -104,12 +134,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </header>
 
       <main
+        id="main"
+        tabIndex={-1}
         style={{
           flex: 1,
           padding: "1.5rem 1.25rem",
           maxWidth: 1200,
           width: "100%",
           margin: "0 auto",
+          outline: "none",
         }}
       >
         {children}

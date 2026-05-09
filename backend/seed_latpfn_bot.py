@@ -34,6 +34,7 @@ def main() -> None:
     try:
         bot = db.query(Bot).filter(Bot.slug == BOT_CFG["slug"]).first()
         if bot is None:
+            # Bot.webhook_secret default factory fires here.
             bot = Bot(**BOT_CFG)
             db.add(bot)
             db.flush()  # so bot.id is populated
@@ -45,6 +46,11 @@ def main() -> None:
             bot.strategy_type = BOT_CFG["strategy_type"]
             bot.instruments_csv = BOT_CFG["instruments_csv"]
             bot.risk_level = BOT_CFG["risk_level"]
+            if not getattr(bot, "webhook_secret", None):
+                # Heal a row that pre-dates the webhook_secret column.
+                from app.db.models import _generate_webhook_secret
+
+                bot.webhook_secret = _generate_webhook_secret()
 
         for tf in TIMEFRAMES:
             existing = (

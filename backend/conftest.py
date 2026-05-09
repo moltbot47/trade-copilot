@@ -75,7 +75,11 @@ def client(db_engine) -> Generator[TestClient, None, None]:
 
     The lifespan context is allowed to run because the override is safe
     (it just creates tables that already exist on our in-memory engine).
+    Rate limiting is disabled in tests so multiple requests per test
+    don't trip the 60/min default cap (and so that route-level limiters
+    that require a Response param don't error in TestClient).
     """
+    from app.core.rate_limit import limiter
     from app.db.database import get_db
     from app.main import app
 
@@ -91,10 +95,15 @@ def client(db_engine) -> Generator[TestClient, None, None]:
             s.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    prev_enabled = limiter.enabled
+    limiter.enabled = False
     # Use TestClient as a context manager so lifespan startup/shutdown runs.
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        limiter.enabled = prev_enabled
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture()
@@ -124,6 +133,8 @@ def seed_bots(db_session):
     """Seed the 3 starter bots + 1 latpfn bot for tests that need them."""
     from app.db.models import Bot, StrategyType
 
+    # Fixed webhook_secret values for deterministic HMAC tests. Real seeds
+    # use ``secrets.token_urlsafe(32)`` per-row.
     bots = [
         Bot(
             name="ORB Breakout",
@@ -134,6 +145,7 @@ def seed_bots(db_session):
             backtest_profit_factor=1.4,
             risk_level=3,
             instruments_csv="EURUSD",
+            webhook_secret="test-secret-orb-breakout",
         ),
         Bot(
             name="Squeeze Momentum",
@@ -144,6 +156,7 @@ def seed_bots(db_session):
             backtest_profit_factor=1.6,
             risk_level=4,
             instruments_csv="EURUSD",
+            webhook_secret="test-secret-squeeze-momentum",
         ),
         Bot(
             name="Stoch Hook Reversal",
@@ -154,6 +167,7 @@ def seed_bots(db_session):
             backtest_profit_factor=1.3,
             risk_level=2,
             instruments_csv="XAUUSD",
+            webhook_secret="test-secret-stoch-hook-reversal",
         ),
         Bot(
             name="LaT-PFN Momentum",
@@ -164,6 +178,7 @@ def seed_bots(db_session):
             backtest_profit_factor=1.5,
             risk_level=3,
             instruments_csv="BTCUSD,ETHUSD",
+            webhook_secret="test-secret-latpfn-momentum",
         ),
     ]
     for b in bots:

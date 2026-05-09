@@ -68,6 +68,17 @@ async def connect(
     user.tradelocker_server = payload.server
     user.tradelocker_env = payload.env
     db.commit()
+
+    # Kick off the TradeLocker → WS relay in the background so subscribed
+    # WebSocket clients start receiving account/positions events immediately.
+    # Fire-and-forget — failures must not block the HTTP response.
+    try:
+        from app.ws.relay_manager import relay_manager
+
+        relay_manager.start_for_user(user.id)
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.debug("relay_manager.start_for_user skipped: %s", exc)
+
     return StatusResponse(status="connected", detail=user.tradelocker_account_id or "")
 
 

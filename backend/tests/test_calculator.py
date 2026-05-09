@@ -9,8 +9,8 @@ def test_preview_default_inputs_returns_expected_math(client):
     )
     assert res.status_code == 200
     body = res.json()
-    # 10_000 * 1.01^100 ≈ 26895.79
-    assert abs(body["end_balance"] - 26895.79) < 1.0
+    # 10_000 * 1.01^100 ≈ 27048.14
+    assert abs(body["end_balance"] - 27048.14) < 1.0
     assert body["start_balance"] == 10_000
     assert body["days"] == 100
     assert body["daily_rate_pct"] == 1.0

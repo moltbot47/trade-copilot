@@ -34,9 +34,9 @@ export default function DonatePage() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }} className="accent">
+        <h2 style={{ marginTop: 0 }} className="accent">
           where the money goes
-        </h3>
+        </h2>
         <ul style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.7 }}>
           <li>VPS / hosting bills</li>
           <li>Strategy R&amp;D — new bots, better backtests</li>

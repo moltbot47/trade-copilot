@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import EmailGate from "@/components/EmailGate";
 import RiskSlider from "@/components/RiskSlider";
 import PnLChart from "@/components/PnLChart";
@@ -13,6 +14,7 @@ import type {
   Signal,
   Bot,
 } from "@/lib/types";
+import type { AccountEvent, PositionsEvent, SignalsEvent } from "@/lib/ws-types";
 
 export default function DashboardPage() {
   const [account, setAccount] = useState<AccountState | null>(null);
@@ -71,18 +73,70 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
+  const ws = useWebSocket();
+
+  // One-shot REST load on mount — populates everything before WS pushes start.
   useEffect(() => {
     loadAll();
-    const t = setInterval(loadAll, 15000);
-    return () => clearInterval(t);
+    // No setInterval — live updates come via WS subscriptions below.
   }, []);
+
+  // Live account state.
+  useEffect(() => {
+    const off = ws.subscribe<AccountEvent>("account", (payload) => {
+      setAccount((curr) => ({ ...(curr || {}), ...payload }));
+      setAccountErr(null);
+    });
+    return off;
+  }, [ws.subscribe]);
+
+  // Live positions — refetch the positions list when something changes.
+  useEffect(() => {
+    const off = ws.subscribe<PositionsEvent>("positions", async () => {
+      try {
+        const positions = await api.getPositions();
+        setSignals(positions);
+      } catch {
+        // ignore
+      }
+    });
+    return off;
+  }, [ws.subscribe]);
+
+  // Live signals — append to the signal log if not already present.
+  useEffect(() => {
+    const off = ws.subscribe<SignalsEvent>("signals", async () => {
+      try {
+        const positions = await api.getPositions();
+        setSignals(positions);
+      } catch {
+        // ignore
+      }
+    });
+    return off;
+  }, [ws.subscribe]);
+
+  // If WS reconnects after being closed, do a one-shot resync to plug any gap.
+  useEffect(() => {
+    if (ws.status === "open") {
+      loadAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ws.status]);
 
   const updateAggression = async (subId: number, aggression: number) => {
     setSubs((curr) =>
       curr.map((s) => (s.id === subId ? { ...s, aggression } : s))
     );
     try {
-      await api.updateSubscription(subId, { aggression });
+      if (ws.status === "open") {
+        await ws.command("subscription.update", {
+          subscription_id: subId,
+          aggression_level: aggression,
+        });
+      } else {
+        await api.updateSubscription(subId, { aggression });
+      }
     } catch (err) {
       setSubsErr((err as Error).message);
     }
@@ -94,7 +148,14 @@ export default function DashboardPage() {
       curr.map((s) => (s.id === sub.id ? { ...s, paused: next } : s))
     );
     try {
-      await api.updateSubscription(sub.id, { paused: next });
+      if (ws.status === "open") {
+        await ws.command("subscription.update", {
+          subscription_id: sub.id,
+          paused: next,
+        });
+      } else {
+        await api.updateSubscription(sub.id, { paused: next });
+      }
     } catch (err) {
       setSubsErr((err as Error).message);
       // revert
@@ -118,11 +179,11 @@ export default function DashboardPage() {
           {">"} live console
         </div>
         <h1 style={{ marginTop: "0.25rem" }}>dashboard</h1>
-        <p className="dim">auto-refresh: 15s</p>
+        <p className="dim">live ws stream {ws.status === "open" ? "(connected)" : `(${ws.status})`}</p>
       </header>
 
       {backendOffline && (
-        <div className="card" style={{ borderColor: "var(--danger)" }}>
+        <div role="alert" className="card" style={{ borderColor: "var(--danger)" }}>
           <strong className="danger">backend offline.</strong>{" "}
           <span className="dim">
             Start the API at{" "}
@@ -132,7 +193,7 @@ export default function DashboardPage() {
       )}
 
       {/* Account state */}
-      <section className="card">
+      <section className="card" aria-live="polite" aria-atomic="false">
         <h2 style={{ marginTop: 0 }} className="accent">
           {">"} account
         </h2>

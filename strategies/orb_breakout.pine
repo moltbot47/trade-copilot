@@ -82,16 +82,35 @@ alertcondition(longSig,  title = "ORB Long Signal",  message = "ORB long breakou
 alertcondition(shortSig, title = "ORB Short Signal", message = "ORB short breakout")
 
 // ----------------------------- Webhook payload -------------------------------
-// Paste this exact block (minus the // prefix) into the TradingView alert
-// "Message" box when creating the webhook alert. {{...}} placeholders are
-// replaced by TradingView at fire time.
+// Two delivery modes — pick ONE for your TradingView alert (see docs/SETUP.md).
 //
-// {
-//   "bot_secret": "orb-breakout",
-//   "instrument": "{{ticker}}",
-//   "side": "buy",
-//   "entry_price": {{close}},
-//   "stop_loss": {{strategy.position_avg_price}} - 50,
-//   "take_profit": {{strategy.position_avg_price}} + 75,
-//   "base_lot_size": 0.10
-// }
+// (A) Hardened mode (PREFERRED) — relay signs requests with HMAC-SHA256.
+//     TradingView Pine cannot compute HMAC, so point alerts at the local
+//     `discord_relay.py` (or any signing proxy) and let it inject these
+//     three headers before forwarding to /api/webhooks/tradingview:
+//       X-Bot-Slug:          orb-breakout
+//       X-Webhook-Timestamp: <unix-seconds>
+//       X-Webhook-Signature: hex(HMAC_SHA256(secret, f"{ts}.{body}"))
+//     Then paste THIS body into the alert Message box (no bot_secret):
+//
+//     {
+//       "instrument": "{{ticker}}",
+//       "side": "buy",
+//       "entry_price": {{close}},
+//       "stop_loss": {{strategy.position_avg_price}} - 50,
+//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "base_lot_size": 0.10
+//     }
+//
+// (B) Legacy mode (DEPRECATED — emits server-side warning logs).
+//     Direct TradingView -> /api/webhooks/tradingview, body:
+//
+//     {
+//       "bot_secret": "orb-breakout",
+//       "instrument": "{{ticker}}",
+//       "side": "buy",
+//       "entry_price": {{close}},
+//       "stop_loss": {{strategy.position_avg_price}} - 50,
+//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "base_lot_size": 0.10
+//     }

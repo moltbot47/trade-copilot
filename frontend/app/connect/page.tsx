@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import EmailGate from "@/components/EmailGate";
 import type { ConnectResponse, AccountState } from "@/lib/types";
+import type { AccountEvent } from "@/lib/ws-types";
 
 export default function ConnectPage() {
   const [email, setEmail] = useState("");
@@ -18,6 +20,8 @@ export default function ConnectPage() {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [accLoading, setAccLoading] = useState(true);
   const [accError, setAccError] = useState<string | null>(null);
+
+  const ws = useWebSocket();
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +38,15 @@ export default function ConnectPage() {
       mounted = false;
     };
   }, []);
+
+  // Live account updates — balance/equity/PNL push as they change.
+  useEffect(() => {
+    const off = ws.subscribe<AccountEvent>("account", (payload) => {
+      setAccount((curr) => ({ ...(curr || {}), ...payload }));
+      setAccError(null);
+    });
+    return off;
+  }, [ws.subscribe]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +103,13 @@ export default function ConnectPage() {
           gap: "1.25rem",
         }}
       >
-        <form onSubmit={submit} className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <form
+          onSubmit={submit}
+          className="card"
+          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+          aria-describedby={error ? "tl-form-error" : undefined}
+          noValidate
+        >
           <h2 style={{ marginTop: 0 }} className="accent">
             credentials
           </h2>
@@ -102,6 +121,7 @@ export default function ConnectPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              aria-required="true"
               autoComplete="username"
             />
           </div>
@@ -114,28 +134,31 @@ export default function ConnectPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-required="true"
                 autoComplete="current-password"
-                style={{ paddingRight: "3.5rem" }}
+                style={{ paddingRight: "4.5rem" }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "hide password" : "show password"}
                 aria-pressed={showPassword}
-                tabIndex={0}
+                aria-controls="tl-password"
                 style={{
                   position: "absolute",
-                  right: "0.5rem",
+                  right: "0.4rem",
                   top: "50%",
                   transform: "translateY(-50%)",
                   background: "transparent",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-dim)",
+                  border: "1px solid var(--border-strong)",
+                  color: "var(--text)",
                   fontSize: "0.7rem",
-                  padding: "0.15rem 0.4rem",
+                  padding: "0.4rem 0.55rem",
                   cursor: "pointer",
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
+                  minHeight: 36,
+                  minWidth: 48,
                 }}
               >
                 {showPassword ? "hide" : "show"}
@@ -151,6 +174,7 @@ export default function ConnectPage() {
               onChange={(e) => setServer(e.target.value)}
               placeholder="GENFX"
               required
+              aria-required="true"
               autoComplete="off"
               aria-describedby="tl-server-hint"
               pattern="[A-Za-z0-9_\-]+"
@@ -166,10 +190,14 @@ export default function ConnectPage() {
               id="tl-env"
               value={env}
               onChange={(e) => setEnv(e.target.value as "demo" | "live")}
+              aria-describedby="tl-env-hint"
             >
               <option value="demo">demo (paper money)</option>
               <option value="live">live (real money)</option>
             </select>
+            <div id="tl-env-hint" className="dim" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>
+              live executes real-money trades — confirmation required.
+            </div>
           </div>
           <div>
             <button type="submit" className="btn btn-primary" disabled={loading}>
@@ -177,12 +205,23 @@ export default function ConnectPage() {
             </button>
           </div>
           {error && (
-            <p className="danger" style={{ margin: 0 }}>
+            <p
+              id="tl-form-error"
+              role="alert"
+              aria-live="assertive"
+              className="danger"
+              style={{ margin: 0 }}
+            >
               error: {error}
             </p>
           )}
           {result?.success && (
-            <p className="accent" style={{ margin: 0 }}>
+            <p
+              role="status"
+              aria-live="polite"
+              className="accent"
+              style={{ margin: 0 }}
+            >
               connected{result.account_id ? ` — ${result.account_id}` : ""}
             </p>
           )}

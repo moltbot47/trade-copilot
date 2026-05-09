@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import enum
+import secrets
 from datetime import datetime
 
 from sqlalchemy import (
@@ -18,6 +19,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
+
+
+def _generate_webhook_secret() -> str:
+    """Default factory for Bot.webhook_secret — 256 bits of url-safe entropy."""
+    return secrets.token_urlsafe(32)
 
 
 class StrategyType(str, enum.Enum):
@@ -72,6 +78,13 @@ class Bot(Base):
     instruments_csv: Mapped[str] = mapped_column(String(512), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Per-bot HMAC secret for inbound webhook signature verification.
+    # Auto-generated at row creation. Rotatable via /api/bots/{slug}/webhook/rotate.
+    # NOT exposed in the public bot catalog — only via the authenticated owner endpoint.
+    webhook_secret: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=_generate_webhook_secret
+    )
 
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="bot", cascade="all, delete-orphan")
     signals: Mapped[list["Signal"]] = relationship(back_populates="bot")

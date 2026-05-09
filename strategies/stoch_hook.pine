@@ -77,12 +77,31 @@ alertcondition(longSig,  title = "Stoch Hook Long",  message = "Stoch hook long"
 alertcondition(shortSig, title = "Stoch Hook Short", message = "Stoch hook short")
 
 // ----------------------------- Webhook payload -------------------------------
-// {
-//   "bot_secret": "stoch-hook",
-//   "instrument": "{{ticker}}",
-//   "side": "buy",
-//   "entry_price": {{close}},
-//   "stop_loss": {{strategy.position_avg_price}} - 50,
-//   "take_profit": {{strategy.position_avg_price}} + 75,
-//   "base_lot_size": 0.10
-// }
+// See docs/SETUP.md "Securing your TradingView webhooks" for the full guide.
+//
+// (A) Hardened mode (PREFERRED) — relay signs requests; required headers:
+//       X-Bot-Slug:          stoch-hook-reversal
+//       X-Webhook-Timestamp: <unix-seconds>
+//       X-Webhook-Signature: hex(HMAC_SHA256(secret, f"{ts}.{body}"))
+//     Alert message body (no bot_secret needed):
+//
+//     {
+//       "instrument": "{{ticker}}",
+//       "side": "buy",
+//       "entry_price": {{close}},
+//       "stop_loss": {{strategy.position_avg_price}} - 50,
+//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "base_lot_size": 0.10
+//     }
+//
+// (B) Legacy mode (DEPRECATED, server emits WARN log per request):
+//
+//     {
+//       "bot_secret": "stoch-hook-reversal",
+//       "instrument": "{{ticker}}",
+//       "side": "buy",
+//       "entry_price": {{close}},
+//       "stop_loss": {{strategy.position_avg_price}} - 50,
+//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "base_lot_size": 0.10
+//     }
