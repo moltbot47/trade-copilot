@@ -57,19 +57,21 @@ export default function SignalLog({ signals }: { signals: Signal[] }) {
                 : sideUpper === "SELL"
                   ? "var(--danger)"
                   : "var(--text)";
-            const entry =
-              typeof (s as { entry?: number }).entry === "number"
-                ? (s as { entry: number }).entry.toFixed(2)
-                : (s as { avg_price?: number }).avg_price?.toFixed?.(2) ??
-                  (s as { entry?: unknown }).entry ??
-                  "—";
+            // Coerce entry to a renderable string. Could be `entry` (Signal),
+            // `avg_price` (Position object piggybacked through state), or
+            // missing entirely.
+            const rawEntry =
+              (s as { entry?: number }).entry ??
+              (s as { avg_price?: number }).avg_price;
+            const entryStr: string =
+              typeof rawEntry === "number" ? rawEntry.toFixed(2) : "—";
             return (
               <tr key={s.id ?? idx}>
                 <td className="dim">{fmtTime(s.time)}</td>
                 <td>{s.bot ?? ""}</td>
                 <td>{s.instrument ?? ""}</td>
                 <td style={{ color: sideColor }}>{sideUpper || ""}</td>
-                <td>{entry}</td>
+                <td>{entryStr}</td>
                 <td style={{ color: statusColor(s.status) }}>{s.status ?? ""}</td>
               </tr>
             );
