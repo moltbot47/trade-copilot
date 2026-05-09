@@ -19,6 +19,7 @@ export type WsChannel =
   | "positions"
   | "trades"
   | "signals"
+  | "analysis"
   | "strategy:1m"
   | "strategy:5m";
 
