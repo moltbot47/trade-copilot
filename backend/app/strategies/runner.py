@@ -38,6 +38,8 @@ from app.strategies.latpfn_client import LaTPFNClient
 from app.strategies.momentum import LatPFNMomentumStrategy
 from app.strategies.performance_tracker import PerformanceTracker
 from app.strategies.position_monitor import PositionMonitor
+from app.strategies.quant_strategy import LatPFNQuantStrategy
+from app.strategies.trade_manager import CohortCommand, TradeManager
 
 logger = logging.getLogger(__name__)
 
@@ -579,6 +581,359 @@ class StrategyRunner:
         db = self.db_session_factory()
         try:
             users = db.query(User).filter(User.email.in_(self.user_emails), User.is_active.is_(True)).all()
+            for u in users:
+                token = decrypt(u.tradelocker_token) if u.tradelocker_token else None
+                if token and u.tradelocker_account_id:
+                    return {
+                        "account_id": u.tradelocker_account_id,
+                        "token": token,
+                        "acc_num": u.tradelocker_acc_num or "1",
+                    }
+            return None
+        finally:
+            db.close()
+
+
+# ----------------------------------------------------------------------------
+# QuantRunner — pyramiding/scale-out/trail-SL strategy on top of LaT-PFN
+# ----------------------------------------------------------------------------
+
+
+class QuantRunner:
+    """Runner for `LatPFNQuantStrategy`.
+
+    Layered on top of the existing infrastructure (BarFetcher, LaTPFNClient,
+    TradeLockerClient). Each tick:
+
+      1. For each (user, symbol) with an open cohort:
+         - fetch bars + forecast → call TradeManager.evaluate()
+         - execute the returned CohortCommand (scale_in / partial_close /
+           modify_sl / exit_all) via TradeLockerClient.
+
+      2. For each (user, symbol) WITHOUT an open cohort:
+         - call strategy.on_bar() to look for an entry.
+         - if signal: open cohort + place initial leg.
+
+    Cohort state lives in DB so it survives restarts. The runner is
+    re-entrant; calling QuantRunner.start() twice for the same (bot, tf)
+    returns the existing instance.
+    """
+
+    def __init__(
+        self,
+        db_session_factory,
+        bot_id: int,
+        timeframe: str,
+        symbols: list[str],
+        user_emails: list[str],
+        latpfn_endpoint: Optional[str] = None,
+    ) -> None:
+        self.db_session_factory = db_session_factory
+        self.bot_id = bot_id
+        self.timeframe = timeframe
+        self.symbols = list(symbols)
+        self.user_emails = list(user_emails)
+        self.latpfn_endpoint = latpfn_endpoint
+        self.task: Optional[asyncio.Task] = None
+        self._stop = asyncio.Event()
+
+    @classmethod
+    async def start(cls, **kwargs) -> "QuantRunner":
+        runner = cls(**kwargs)
+        key = (runner.bot_id, runner.timeframe)
+        existing = _RUNNERS.get(key)
+        if existing and existing.task and not existing.task.done():
+            return existing  # type: ignore[return-value]
+        runner.task = asyncio.create_task(
+            runner.run_loop(), name=f"quant-{runner.bot_id}-{runner.timeframe}"
+        )
+        _RUNNERS[key] = runner  # type: ignore[assignment]
+        return runner
+
+    async def stop(self) -> None:
+        self._stop.set()
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except (asyncio.CancelledError, Exception):
+                pass
+        _RUNNERS.pop((self.bot_id, self.timeframe), None)
+
+    async def run_loop(self) -> None:
+        client = TradeLockerClient(env="demo")
+        latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
+        strategy = LatPFNQuantStrategy(
+            bot_id=self.bot_id,
+            timeframe=self.timeframe,
+            latpfn_client=latpfn_client,
+            threshold=1.5,
+        )
+
+        feed_user = self._load_first_authed_user()
+        if feed_user is None:
+            logger.warning("quant runner bot=%s tf=%s: no authed user", self.bot_id, self.timeframe)
+            return
+        bar_fetcher = BarFetcher(
+            client=client,
+            account_id=feed_user["account_id"],
+            token=feed_user["token"],
+            acc_num=feed_user["acc_num"],
+        )
+
+        sleep_seconds = tf_seconds(self.timeframe)
+        logger.info("quant runner started bot=%s tf=%s", self.bot_id, self.timeframe)
+
+        while not self._stop.is_set():
+            try:
+                await self._tick(strategy, bar_fetcher, client)
+            except Exception as exc:
+                logger.exception("quant runner tick failed: %s", exc)
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=sleep_seconds)
+            except asyncio.TimeoutError:
+                pass
+
+    async def _tick(
+        self,
+        strategy: LatPFNQuantStrategy,
+        bar_fetcher: BarFetcher,
+        client: TradeLockerClient,
+    ) -> None:
+        for symbol in self.symbols:
+            try:
+                bars = await bar_fetcher.fetch_bars(symbol, self.timeframe, count=240)
+            except Exception as exc:
+                logger.warning("bars fetch failed %s: %s", symbol, exc)
+                continue
+            current_price = float(bars["close"].iloc[-1]) if len(bars) else None
+            forecast_view = await strategy.forecast_view(bars) if current_price else None
+
+            users = self._load_users()
+            for user in users:
+                token = decrypt(user.tradelocker_token) if user.tradelocker_token else None
+                if not token or not user.tradelocker_account_id:
+                    continue
+                tm_db = self.db_session_factory()
+                try:
+                    tm = TradeManager(tm_db, self.bot_id, user.id, self.timeframe)
+                    open_cohorts = tm.list_open_cohorts(symbol)
+                    # 1) Manage open cohorts
+                    for cohort in open_cohorts:
+                        cmd = tm.evaluate(
+                            cohort,
+                            current_price=current_price or cohort.weighted_avg_entry,
+                            forecast_drift=(forecast_view or {}).get("drift", 0.0),
+                            forecast_confidence=(forecast_view or {}).get("confidence", 0.0),
+                        )
+                        if cmd is None:
+                            continue
+                        try:
+                            await self._execute_command(tm, cohort, cmd, user, token, client, current_price or cohort.weighted_avg_entry)
+                            tm_db.commit()
+                        except Exception as exc:
+                            tm_db.rollback()
+                            logger.warning("cmd %s on cohort %s failed: %s", cmd.kind, cohort.id, exc)
+                    # 2) Look for new entries (only if no open cohort for this symbol)
+                    if not open_cohorts:
+                        sig = await strategy.on_bar(symbol, bars)
+                        if sig is not None and sig.extra.get("kind") == "entry":
+                            try:
+                                await self._open_new_cohort(tm, sig, user, token, client)
+                                tm_db.commit()
+                            except Exception as exc:
+                                tm_db.rollback()
+                                logger.warning("open cohort failed: %s", exc)
+                finally:
+                    tm_db.close()
+
+    # ---------- command execution ----------
+
+    async def _open_new_cohort(
+        self,
+        tm: TradeManager,
+        sig: StrategySignal,
+        user: User,
+        token: str,
+        client: TradeLockerClient,
+    ) -> None:
+        atr = float(sig.extra.get("atr", 0.0))
+        order = await client.place_order(
+            account_id=user.tradelocker_account_id,
+            token=token,
+            acc_num=user.tradelocker_acc_num or "1",
+            symbol=sig.symbol,
+            side=sig.side,
+            qty=sig.qty,
+            sl=sig.stop_loss,
+            tp=sig.take_profit,
+        )
+        order_id = str(order.get("order_id") or "")
+        # Find the position id
+        positions = await client.get_positions(
+            user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+        )
+        # Newest position with matching symbol/side
+        pos_id = None
+        for p in reversed(positions):
+            if str(p.get("side")).lower() == sig.side.lower():
+                pos_id = str(p.get("id"))
+                break
+        cohort = tm.open_cohort(
+            instrument=sig.symbol,
+            side=sig.side,
+            entry_price=sig.entry_price,
+            atr=atr,
+            qty=sig.qty,
+            stop_loss=sig.stop_loss,
+            take_profit=sig.take_profit,
+            tl_position_id=pos_id,
+            tl_order_id=order_id,
+            forecast_drift=sig.forecast_drift,
+            forecast_confidence=sig.forecast_confidence,
+        )
+        logger.info(
+            "cohort %s opened %s %s qty=%.4f entry=%.2f", cohort.id, sig.side, sig.symbol, sig.qty, sig.entry_price
+        )
+
+    async def _execute_command(
+        self,
+        tm: TradeManager,
+        cohort: "Cohort",  # noqa
+        cmd: CohortCommand,
+        user: User,
+        token: str,
+        client: TradeLockerClient,
+        current_price: float,
+    ) -> None:
+        from app.db.models import Cohort  # avoid circular at import time
+
+        assert isinstance(cohort, Cohort)
+        if cmd.kind == "scale_in":
+            order = await client.place_order(
+                account_id=user.tradelocker_account_id,
+                token=token,
+                acc_num=user.tradelocker_acc_num or "1",
+                symbol=cohort.instrument,
+                side=cohort.side,
+                qty=cmd.qty,
+                sl=cmd.new_stop,
+                tp=cohort.initial_take_profit,
+            )
+            order_id = str(order.get("order_id") or "")
+            positions = await client.get_positions(
+                user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+            )
+            pos_id = None
+            for p in reversed(positions):
+                if str(p.get("side")).lower() == cohort.side.lower():
+                    pos_id = str(p.get("id"))
+                    break
+            tm.add_scale_in_leg(
+                cohort,
+                entry_price=current_price,
+                qty=cmd.qty,
+                stop_loss=cmd.new_stop,
+                tl_position_id=pos_id,
+                tl_order_id=order_id,
+            )
+            # Move existing entry-leg SL to break-even on the original
+            try:
+                for leg in cohort.legs:
+                    if leg.role == "entry" and leg.is_open and leg.tradelocker_position_id:
+                        await client.modify_position(
+                            leg.tradelocker_position_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                            stop_loss=cohort.weighted_avg_entry,
+                        )
+                        leg.stop_loss = float(cohort.weighted_avg_entry)
+            except Exception as exc:
+                logger.warning("entry-leg SL move failed: %s", exc)
+
+        elif cmd.kind == "partial_close":
+            close_resp = await client.partial_close(
+                account_id=user.tradelocker_account_id,
+                token=token,
+                acc_num=user.tradelocker_acc_num or "1",
+                position_id=cohort.legs[0].tradelocker_position_id or "",
+                symbol=cohort.instrument,
+                original_side=cohort.side,
+                qty=cmd.qty,
+            )
+            tm.record_partial_close(
+                cohort,
+                qty_closed=cmd.qty,
+                close_price=current_price,
+                tl_order_id=str(close_resp.get("order_id") or ""),
+            )
+            # Move SL on remaining legs to break-even
+            if cmd.new_stop is not None:
+                tm.update_stop(cohort, cmd.new_stop)
+                for leg in cohort.legs:
+                    if leg.is_open and leg.role in ("entry", "scale_in") and leg.tradelocker_position_id:
+                        try:
+                            await client.modify_position(
+                                leg.tradelocker_position_id,
+                                token=token,
+                                acc_num=user.tradelocker_acc_num or "1",
+                                stop_loss=cmd.new_stop,
+                            )
+                        except Exception as exc:
+                            logger.warning("SL move failed leg=%s: %s", leg.id, exc)
+
+        elif cmd.kind == "modify_sl":
+            if cmd.new_stop is None:
+                return
+            tm.update_stop(cohort, cmd.new_stop)
+            for leg in cohort.legs:
+                if leg.is_open and leg.role in ("entry", "scale_in") and leg.tradelocker_position_id:
+                    try:
+                        await client.modify_position(
+                            leg.tradelocker_position_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                            stop_loss=cmd.new_stop,
+                        )
+                    except Exception as exc:
+                        logger.warning("trail SL failed leg=%s: %s", leg.id, exc)
+
+        elif cmd.kind == "exit_all":
+            for leg in cohort.legs:
+                if leg.is_open and leg.tradelocker_position_id:
+                    try:
+                        await client.close_position(
+                            leg.tradelocker_position_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                        )
+                    except Exception as exc:
+                        logger.warning("close leg %s failed: %s", leg.id, exc)
+            tm.close_cohort(cohort, current_price, reason=cmd.reason or "exit_all")
+
+    # ---------- helpers ----------
+
+    def _load_users(self) -> list[User]:
+        if not self.user_emails:
+            return []
+        db = self.db_session_factory()
+        try:
+            return (
+                db.query(User)
+                .filter(User.email.in_(self.user_emails), User.is_active.is_(True))
+                .all()
+            )
+        finally:
+            db.close()
+
+    def _load_first_authed_user(self) -> Optional[dict]:
+        db = self.db_session_factory()
+        try:
+            users = (
+                db.query(User)
+                .filter(User.email.in_(self.user_emails), User.is_active.is_(True))
+                .all()
+            )
             for u in users:
                 token = decrypt(u.tradelocker_token) if u.tradelocker_token else None
                 if token and u.tradelocker_account_id:

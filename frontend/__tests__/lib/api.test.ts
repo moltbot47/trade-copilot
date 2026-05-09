@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, setUserEmail, clearUserEmail } from "@/lib/api";
+import { api, ApiError, setUserEmail, clearUserEmail } from "@/lib/api";
 
 const okJson = (body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -83,12 +83,15 @@ describe("api wrapper", () => {
     });
   });
 
-  it("throws Backend offline on fetch network error", async () => {
+  it("throws ApiError(kind=network) when fetch itself rejects", async () => {
     fetchSpy.mockRejectedValueOnce(new TypeError("fail to fetch"));
-    await expect(api.getBots()).rejects.toThrow("Backend offline");
+    await expect(api.getBots()).rejects.toMatchObject({
+      name: "ApiError",
+      kind: "network",
+    });
   });
 
-  it("propagates HTTPError detail from backend response body", async () => {
+  it("propagates HTTPError detail from backend response body as validation kind", async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: "bot not found" }), {
         status: 404,
@@ -96,5 +99,48 @@ describe("api wrapper", () => {
       }),
     );
     await expect(api.getBot("missing")).rejects.toThrow("bot not found");
+  });
+
+  it("classifies 401 as ApiError kind=auth", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: "session expired" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(api.getAccountState()).rejects.toMatchObject({
+      name: "ApiError",
+      kind: "auth",
+      status: 401,
+    });
+  });
+
+  it("classifies 500 as ApiError kind=server with default copy", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response("oops", { status: 500 }),
+    );
+    let caught: unknown = null;
+    try {
+      await api.getBots();
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).kind).toBe("server");
+    expect((caught as ApiError).status).toBe(500);
+  });
+
+  it("classifies 4xx as ApiError kind=validation", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: "bad input" }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(api.getBots()).rejects.toMatchObject({
+      kind: "validation",
+      status: 422,
+      message: "bad input",
+    });
   });
 });

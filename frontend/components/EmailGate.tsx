@@ -1,7 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, getUserEmail, setUserEmail } from "@/lib/api";
+import { api, ApiError, getUserEmail, setUserEmail } from "@/lib/api";
+
+function friendlyError(err: unknown): string {
+  if (err instanceof ApiError) {
+    switch (err.kind) {
+      case "network":
+        return "Server unreachable. Try again.";
+      case "auth":
+        return "Session expired. Refresh and try again.";
+      case "validation":
+        return err.message || "Invalid email.";
+      case "server":
+        return "Server error. Try again in a moment.";
+      default:
+        return err.message || "Login failed.";
+    }
+  }
+  return (err as Error)?.message || "Login failed.";
+}
 
 export default function EmailGate() {
   const [open, setOpen] = useState(false);
@@ -85,7 +103,7 @@ export default function EmailGate() {
       // Refresh so all data reloads with the authenticated session.
       if (typeof window !== "undefined") window.location.reload();
     } catch (err) {
-      setError((err as Error).message || "login failed");
+      setError(friendlyError(err));
     } finally {
       setSubmitting(false);
     }

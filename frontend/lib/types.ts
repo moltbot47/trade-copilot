@@ -53,8 +53,13 @@ export type PnLPoint = {
   pnl: number;
 };
 
+// Backend responds with { status: "connected", detail: "<account_id>" }.
+// Older code may also send { success, account_id, balance } — keep both
+// optional so the UI is forgiving.
 export type ConnectResponse = {
-  success: boolean;
+  status?: string;
+  detail?: string;
+  success?: boolean;
   account_id?: string;
   balance?: number;
   message?: string;

@@ -1,11 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError, getUserEmail } from "@/lib/api";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import EmailGate from "@/components/EmailGate";
 import type { ConnectResponse, AccountState } from "@/lib/types";
 import type { AccountEvent } from "@/lib/ws-types";
+
+/**
+ * Map an unknown error into copy that's friendly for non-technical users.
+ * Tightly coupled to ApiError.kind from lib/api.ts.
+ */
+function friendlyError(err: unknown): string {
+  if (err instanceof ApiError) {
+    switch (err.kind) {
+      case "network":
+        return "Server unreachable. Try again.";
+      case "auth":
+        return "Session expired. Refresh and try again.";
+      case "validation":
+        // Body detail is already user-facing — surface it verbatim.
+        return err.message || "Invalid email, password, or server.";
+      case "server":
+        return "Server error. Try again in a moment.";
+      default:
+        return err.message || "Something went wrong.";
+    }
+  }
+  return (err as Error)?.message || "Something went wrong.";
+}
 
 export default function ConnectPage() {
   const [email, setEmail] = useState("");
@@ -25,15 +48,44 @@ export default function ConnectPage() {
 
   useEffect(() => {
     let mounted = true;
-    api
-      .getAccountState()
-      .then((a) => {
-        if (mounted) setAccount(a);
-      })
-      .catch((e: Error) => {
-        if (mounted) setAccError(e.message);
-      })
-      .finally(() => mounted && setAccLoading(false));
+
+    // Initial load: try to fetch account state. If we get a 401, the cookie
+    // has likely expired in the user's browser even though localStorage still
+    // says they're "signed in." Silently re-issue the cookie via login() and
+    // retry once before giving up.
+    const loadAccount = async () => {
+      try {
+        const a = await api.getAccountState();
+        if (mounted) {
+          setAccount(a);
+          setAccError(null);
+        }
+      } catch (err) {
+        if (err instanceof ApiError && err.kind === "auth") {
+          const cachedEmail = getUserEmail();
+          if (cachedEmail) {
+            try {
+              await api.login(cachedEmail);
+              const a = await api.getAccountState();
+              if (mounted) {
+                setAccount(a);
+                setAccError(null);
+              }
+              return;
+            } catch (retryErr) {
+              if (mounted) setAccError(friendlyError(retryErr));
+              return;
+            }
+          }
+        }
+        if (mounted) setAccError(friendlyError(err));
+      } finally {
+        if (mounted) setAccLoading(false);
+      }
+    };
+
+    loadAccount();
+
     return () => {
       mounted = false;
     };
@@ -72,14 +124,34 @@ export default function ConnectPage() {
         setAccount(a);
         setAccError(null);
       } catch (err) {
-        // ignore
+        // ignore — we'll show whatever the WS pushes next
       }
     } catch (err) {
-      setError((err as Error).message);
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
   };
+
+  // Account-card status copy: differentiate "we have no session yet" from
+  // "the network failed" from "the server returned an error."
+  const sessionStatusText = (() => {
+    if (!accError) return null;
+    // ApiError messages we set above are already friendly.
+    if (
+      accError === "Server unreachable. Try again." ||
+      accError === "Cannot reach the server. Check your connection."
+    ) {
+      return "server unreachable — try again";
+    }
+    if (accError === "Session expired. Refresh and try again.") {
+      return "session expired — refresh and sign in";
+    }
+    if (accError === "Server error. Try again in a moment.") {
+      return "server error — try again in a moment";
+    }
+    return "no session — connect above";
+  })();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -215,14 +287,19 @@ export default function ConnectPage() {
               error: {error}
             </p>
           )}
-          {result?.success && (
+          {(result?.success || result?.status === "connected") && (
             <p
               role="status"
               aria-live="polite"
               className="accent"
               style={{ margin: 0 }}
             >
-              connected{result.account_id ? ` — ${result.account_id}` : ""}
+              connected
+              {result.account_id
+                ? ` — ${result.account_id}`
+                : result.detail
+                  ? ` — ${result.detail}`
+                  : ""}
             </p>
           )}
         </form>
@@ -257,11 +334,9 @@ export default function ConnectPage() {
             )}
           </header>
           {accLoading && <p className="dim">loading...</p>}
-          {accError && (
+          {sessionStatusText && (
             <p className="dim" style={{ fontSize: "0.85rem" }}>
-              {accError === "Backend offline"
-                ? "backend offline"
-                : "no session — connect above"}
+              {sessionStatusText}
             </p>
           )}
           {account?.connected && (

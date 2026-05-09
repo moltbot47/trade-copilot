@@ -31,6 +31,13 @@ class StrategyType(str, enum.Enum):
     squeeze = "squeeze"
     stoch_hook = "stoch_hook"
     latpfn_momentum = "latpfn_momentum"
+    latpfn_quant = "latpfn_quant"
+
+
+class CohortStatus(str, enum.Enum):
+    open = "open"
+    partial = "partial"  # partial-close has fired, trailing SL active
+    closed = "closed"
 
 
 class ExecutionStatus(str, enum.Enum):
@@ -211,3 +218,76 @@ class PerformanceSnapshot(Base):
 
     threshold_after: Mapped[float] = mapped_column(Float, default=1.5)
     feedback_action: Mapped[str | None] = mapped_column(String(32), nullable=True)  # tighten|loosen|pause|hold
+
+
+class Cohort(Base):
+    """A pyramided cohort: an entry leg + zero or more scale-in legs.
+
+    Persists across runner restart so a quant strategy can resume management
+    of in-flight positions. Children (CohortLeg) reference this row.
+    """
+
+    __tablename__ = "cohorts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id"), index=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    instrument: Mapped[str] = mapped_column(String(32), nullable=False)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)  # buy|sell
+    timeframe: Mapped[str] = mapped_column(String(8), nullable=False)
+    status: Mapped[CohortStatus] = mapped_column(Enum(CohortStatus), default=CohortStatus.open)
+
+    # ATR sized at entry — fixed for the cohort lifetime.
+    atr_at_entry: Mapped[float] = mapped_column(Float, nullable=False)
+    initial_entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    initial_stop_loss: Mapped[float] = mapped_column(Float, nullable=False)
+    initial_take_profit: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Mutable cohort-wide state
+    weighted_avg_entry: Mapped[float] = mapped_column(Float, nullable=False)
+    total_qty: Mapped[float] = mapped_column(Float, default=0.0)
+    closed_qty: Mapped[float] = mapped_column(Float, default=0.0)  # cumulative scaled-out qty
+    current_stop: Mapped[float] = mapped_column(Float, nullable=False)
+    trail_high_water: Mapped[float] = mapped_column(Float, default=0.0)  # max favorable price seen
+
+    realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
+
+    opened_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    forecast_drift: Mapped[float | None] = mapped_column(Float, nullable=True)
+    forecast_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    legs: Mapped[list["CohortLeg"]] = relationship(back_populates="cohort", cascade="all, delete-orphan")
+
+
+class CohortLeg(Base):
+    """One leg of a Cohort — a single TradeLocker position.
+
+    Each leg has its own broker position id (since hedging mode opens a new
+    position per order). The cohort logic computes weighted averages across
+    these legs.
+    """
+
+    __tablename__ = "cohort_legs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cohort_id: Mapped[int] = mapped_column(ForeignKey("cohorts.id"), index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)  # entry|scale_in|hedge_close
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    qty: Mapped[float] = mapped_column(Float, nullable=False)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    tradelocker_position_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tradelocker_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    is_open: Mapped[bool] = mapped_column(Boolean, default=True)
+    closed_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pnl_usd: Mapped[float] = mapped_column(Float, default=0.0)
+
+    opened_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    cohort: Mapped["Cohort"] = relationship(back_populates="legs")

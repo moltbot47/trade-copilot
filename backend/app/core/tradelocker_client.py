@@ -286,3 +286,72 @@ class TradeLockerClient:
             token=token,
             acc_num=acc_num,
         )
+
+    async def modify_position(
+        self,
+        position_id: str,
+        token: str,
+        acc_num: str,
+        *,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+    ) -> dict:
+        """PATCH /trade/positions/{id} — discovered 2026-05-09 on Genesis FX demo.
+
+        Body shape: {"stopLoss": float, "takeProfit": float}. Either field is
+        optional but at least one must be provided. Verified against demo
+        D#2163244: 200 {"s":"ok"}.
+
+        Other patterns probed (all 4xx): PUT /trade/positions/{id},
+        POST /trade/positions/{id}/modify, PATCH under /trade/accounts/{id}/...
+        """
+        if stop_loss is None and take_profit is None:
+            raise TradeLockerError("modify_position requires at least stopLoss or takeProfit")
+        body: dict[str, Any] = {}
+        if stop_loss is not None:
+            body["stopLoss"] = float(stop_loss)
+        if take_profit is not None:
+            body["takeProfit"] = float(take_profit)
+        raw = await self._request(
+            "PATCH",
+            f"/trade/positions/{position_id}",
+            token=token,
+            acc_num=acc_num,
+            json=body,
+        )
+        if isinstance(raw, dict) and raw.get("s") and raw["s"] != "ok":
+            raise TradeLockerError(
+                f"modify rejected: {raw.get('errmsg') or raw.get('message') or raw}"
+            )
+        return raw
+
+    async def partial_close(
+        self,
+        account_id: str,
+        token: str,
+        acc_num: str,
+        position_id: str,
+        symbol: str,
+        original_side: str,
+        qty: float,
+    ) -> dict:
+        """Hedging-mode partial close.
+
+        On Genesis FX hedging accounts there is no first-class partial-close
+        endpoint (DELETE always closes 100%, and `closeAmount`/`positionId`
+        params are silently ignored — verified 2026-05-09). We emulate it
+        by opening a counter-position of `qty` size, which nets the exposure.
+        Both legs remain visible on the broker but our cohort accounting
+        treats them as netted for P&L.
+
+        Returns the same shape as place_order.
+        """
+        opposite = "sell" if original_side.lower() == "buy" else "buy"
+        return await self.place_order(
+            account_id=account_id,
+            token=token,
+            acc_num=acc_num,
+            symbol=symbol,
+            side=opposite,
+            qty=qty,
+        )

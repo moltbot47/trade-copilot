@@ -34,6 +34,25 @@ export function clearUserEmail(): void {
   window.localStorage.removeItem(EMAIL_KEY);
 }
 
+export type ApiErrorKind =
+  | "network"
+  | "auth"
+  | "validation"
+  | "server"
+  | "unknown";
+
+export class ApiError extends Error {
+  status?: number;
+  kind: ApiErrorKind;
+
+  constructor(message: string, status?: number, kind: ApiErrorKind = "unknown") {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {}
@@ -52,19 +71,60 @@ async function request<T>(
       credentials: "include",
     });
   } catch (err) {
-    throw new Error("Backend offline");
+    // Network/CORS/DNS failure — fetch itself rejected. This is NOT a
+    // signal that the backend is offline; it just means the browser
+    // could not complete the round-trip.
+    throw new ApiError(
+      "Cannot reach the server. Check your connection.",
+      undefined,
+      "network",
+    );
   }
 
   if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
+    // Try to extract the backend's structured error body before deciding
+    // on a friendly message.
+    let backendDetail: string | null = null;
     try {
       const body = await res.json();
-      if (body?.detail) detail = body.detail;
-      else if (body?.message) detail = body.message;
+      if (body?.detail) backendDetail = String(body.detail);
+      else if (body?.message) backendDetail = String(body.message);
     } catch {
-      // ignore
+      // body wasn't JSON — fall through to status-based messaging
     }
-    throw new Error(detail);
+
+    const status = res.status;
+
+    if (status === 401) {
+      throw new ApiError(
+        backendDetail || "Not signed in. Refresh and try again.",
+        401,
+        "auth",
+      );
+    }
+    if (status === 403) {
+      throw new ApiError(backendDetail || "Forbidden.", 403, "auth");
+    }
+    if (status >= 400 && status < 500) {
+      throw new ApiError(
+        backendDetail || `Request failed (HTTP ${status})`,
+        status,
+        "validation",
+      );
+    }
+    if (status >= 500) {
+      throw new ApiError(
+        backendDetail || "Server error. Try again in a moment.",
+        status,
+        "server",
+      );
+    }
+    // Catch-all for the rare 3xx-leak.
+    throw new ApiError(
+      backendDetail || `HTTP ${status}`,
+      status,
+      "unknown",
+    );
   }
   // Some endpoints return no body (e.g. logout could).
   const text = await res.text();
