@@ -79,23 +79,32 @@ def generate_compound_pdf(
     doc = SimpleDocTemplate(
         buf,
         pagesize=landscape(LETTER),
-        leftMargin=0.4 * inch,
-        rightMargin=0.4 * inch,
-        topMargin=0.45 * inch,
-        bottomMargin=0.35 * inch,
+        leftMargin=0.5 * inch,
+        rightMargin=0.5 * inch,
+        topMargin=0.6 * inch,
+        bottomMargin=0.45 * inch,
         title="Compound Growth Strategy — Trade Copilot",
         author="Trade Copilot",
     )
 
     styles = getSampleStyleSheet()
     title = ParagraphStyle("T", parent=styles["Title"], fontName="Helvetica-Bold",
-                           fontSize=24, leading=28, textColor=INK, alignment=TA_LEFT, spaceAfter=4)
+                           fontSize=24, leading=30, textColor=INK,
+                           alignment=TA_LEFT, spaceBefore=2, spaceAfter=4)
     subtitle = ParagraphStyle("ST", parent=styles["Normal"], fontName="Helvetica",
-                              fontSize=11, leading=14, textColor=MUTED, alignment=TA_LEFT, spaceAfter=14)
+                              fontSize=11, leading=15, textColor=MUTED, alignment=TA_LEFT, spaceAfter=14)
     sect = ParagraphStyle("SE", parent=styles["Heading2"], fontName="Helvetica-Bold",
-                          fontSize=13, textColor=ACCENT, spaceBefore=8, spaceAfter=4)
+                          fontSize=13, leading=17, textColor=ACCENT, spaceBefore=8, spaceAfter=4)
     body = ParagraphStyle("B", parent=styles["Normal"], fontName="Helvetica",
                           fontSize=9.5, leading=13, textColor=INK)
+    # Card-specific styles — fix the overlap-with-subtitle bug.
+    card_label = ParagraphStyle("CL", parent=body, fontSize=10, leading=13,
+                                spaceAfter=4)
+    card_big = ParagraphStyle("CB", parent=body, fontName="Helvetica-Bold",
+                              fontSize=20, leading=26, textColor=ACCENT,
+                              spaceBefore=2, spaceAfter=4)
+    card_sub = ParagraphStyle("CS", parent=body, fontSize=9, leading=12,
+                              textColor=MUTED, spaceBefore=2)
     foot = ParagraphStyle("F", parent=styles["Normal"], fontName="Helvetica-Oblique",
                           fontSize=8, leading=11, textColor=MUTED, alignment=TA_CENTER)
 
@@ -139,17 +148,18 @@ def generate_compound_pdf(
         else:
             tier = "Your Target"
         cards.append([
-            Paragraph(f"<b>{tier} · {k}/day</b>", body),
-            Paragraph(f"<font size=18 color='#0A6B3F'><b>{_fmt_usd(end)}</b></font>", body),
+            Paragraph(f"<b>{tier} · {k}/day</b>", card_label),
+            Paragraph(f"{_fmt_usd(end)}", card_big),
             Paragraph(
-                f"<font color='#6B7280'>after {days} days · {_fmt_x(end, start_balance)}</font>",
-                body,
+                f"after {days} days · {_fmt_x(end, start_balance)}",
+                card_sub,
             ),
         ])
 
+    # Sized to fit landscape-letter usable width (~10.0") with 0.5" margins.
     summary_table = Table(
         [[c for c in cards]],
-        colWidths=[3.4 * inch] * len(cards),
+        colWidths=[3.3 * inch] * len(cards),
     )
     summary_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -209,6 +219,13 @@ def generate_compound_pdf(
 
     col_count = 4
     days_per_col = (days + col_count - 1) // col_count
+    # Landscape-letter usable width is ~10.0" after 0.5" L/R margins.
+    # Each sub-table must fit 10.0/4 = 2.5" wide minus a tiny gap.
+    n_rate_cols = len(rate_keys)
+    DAY_W = 0.40 * inch
+    INNER_W = 2.42 * inch  # max width per sub-table content
+    rate_col_w = (INNER_W - DAY_W) / max(n_rate_cols, 1)
+    SUB_TABLE_W = DAY_W + rate_col_w * n_rate_cols  # ~2.42 inches
     sub_tables = []
     for col_idx in range(col_count):
         start_day = col_idx * days_per_col + 1
@@ -219,7 +236,7 @@ def generate_compound_pdf(
         rows = [["Day"] + [k for k in rate_keys]]
         for d in range(start_day, end_day + 1):
             rows.append([str(d)] + [_fmt_usd(series[k][d]) for k in rate_keys])
-        col_widths = [0.4 * inch] + [0.95 * inch] * len(rate_keys)
+        col_widths = [DAY_W] + [rate_col_w] * n_rate_cols
         t = Table(rows, colWidths=col_widths)
         style_cmds = [
             ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
@@ -244,11 +261,12 @@ def generate_compound_pdf(
         t.setStyle(TableStyle(style_cmds))
         sub_tables.append(t)
 
-    grid = Table([sub_tables], colWidths=[3.3 * inch] * col_count)
+    # Outer grid — each cell holds one sub-table; total 4 × 2.5" = 10.0"
+    grid = Table([sub_tables], colWidths=[SUB_TABLE_W + 0.08 * inch] * col_count)
     grid.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
     story.append(grid)
 
