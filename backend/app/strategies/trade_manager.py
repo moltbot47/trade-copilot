@@ -344,6 +344,87 @@ class TradeManager:
                 leg.closed_at = datetime.utcnow()
         self.db.flush()
 
+        # Materialize a TradeOutcome row so /api/strategy/status returns
+        # this trade in recent_trades + the equity curve / performance
+        # tracker / feedback loop pick it up.
+        try:
+            self._record_trade_outcome(cohort, close_price, reason)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("close_cohort: trade outcome record failed: %s", exc)
+
+    def _record_trade_outcome(
+        self, cohort: Cohort, exit_price: float, reason: str
+    ) -> None:
+        """Convert a closed cohort into a TradeOutcome row for the dashboard."""
+        from app.db.models import TradeOutcome  # local import to avoid circular
+
+        avg_entry = float(cohort.weighted_avg_entry)
+        total_qty = float(cohort.total_qty)
+        # PnL per unit (sign depends on direction)
+        if cohort.side == "buy":
+            pnl_per_unit = exit_price - avg_entry
+        else:
+            pnl_per_unit = avg_entry - exit_price
+        # Combine realized (from prior partial closes) + the final close
+        # to give a single net number per cohort.
+        pnl_usd = float(cohort.realized_pnl)
+        # Compute R-multiple using the cohort's initial stop distance.
+        r_distance = max(_r_distance(cohort), 1e-9)
+        r_multiple = float(pnl_per_unit) / r_distance
+        opened_at = cohort.opened_at or datetime.utcnow()
+        closed_at = cohort.closed_at or datetime.utcnow()
+        hold_seconds = max(0, int((closed_at - opened_at).total_seconds()))
+
+        outcome = TradeOutcome(
+            bot_id=cohort.bot_id,
+            signal_id=None,
+            instrument=cohort.instrument,
+            side=cohort.side,
+            timeframe=cohort.timeframe,
+            entry_price=avg_entry,
+            exit_price=float(exit_price),
+            qty=total_qty,
+            pnl_usd=pnl_usd,
+            r_multiple=r_multiple,
+            forecast_drift=None,
+            forecast_confidence=None,
+            threshold_at_entry=None,
+            opened_at=opened_at,
+            closed_at=closed_at,
+            hold_seconds=hold_seconds,
+            mae=0.0,
+            mfe=0.0,
+        )
+        self.db.add(outcome)
+        self.db.flush()
+        # Notify any subscribed WS clients so the activity log + trade log
+        # update without a poll.
+        try:
+            import asyncio
+            from app.ws.event_bus import event_bus
+
+            payload = {
+                "id": outcome.id,
+                "bot_id": outcome.bot_id,
+                "instrument": outcome.instrument,
+                "side": outcome.side,
+                "timeframe": outcome.timeframe,
+                "entry_price": outcome.entry_price,
+                "exit_price": outcome.exit_price,
+                "qty": outcome.qty,
+                "pnl_usd": outcome.pnl_usd,
+                "r_multiple": outcome.r_multiple,
+                "opened_at": outcome.opened_at.isoformat(),
+                "closed_at": outcome.closed_at.isoformat(),
+                "hold_seconds": outcome.hold_seconds,
+                "reason": reason,
+            }
+            result = event_bus.publish("trades", cohort.user_id, payload)
+            if asyncio.iscoroutine(result):
+                asyncio.ensure_future(result)
+        except Exception as exc:  # pragma: no cover
+            logger.debug("ws publish trade close failed: %s", exc)
+
     def list_open_cohorts(self, instrument: Optional[str] = None) -> list[Cohort]:
         q = self.db.query(Cohort).filter(
             Cohort.bot_id == self.bot_id,

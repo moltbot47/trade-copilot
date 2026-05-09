@@ -69,7 +69,59 @@ export default function StrategyPage() {
 
   const prevPerfRef = useRef<PerformanceSnapshot | null>(null);
 
-  const botId = DEFAULT_BOT_ID;
+  // Bot resolution priority:
+  //   1. ?bot=<slug> URL param (set by /bots Subscribe redirect)
+  //   2. User's most recent subscription
+  //   3. DEFAULT_BOT_ID (LaT-PFN Quant Trader)
+  const [botId, setBotId] = useState<number>(DEFAULT_BOT_ID);
+  const [botName, setBotName] = useState<string>("LaT-PFN Quant Trader");
+
+  useEffect(() => {
+    let cancelled = false;
+    const resolveBotId = async () => {
+      // 1. Read URL param
+      const params =
+        typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const slugParam = params?.get("bot");
+
+      try {
+        // Always need bots list to map slug→id and get the display name
+        const bots = await api.getBots();
+        if (cancelled) return;
+
+        if (slugParam) {
+          const matched = bots.find((b) => b.slug === slugParam);
+          if (matched) {
+            setBotId(matched.id);
+            setBotName(matched.name);
+            return;
+          }
+        }
+        // 2. Fall back to most recent subscription
+        const subs = await api.getSubscriptions();
+        if (cancelled) return;
+        if (subs.length > 0) {
+          const last = subs[subs.length - 1];
+          const matched = bots.find((b) => b.id === last.bot_id);
+          if (matched) {
+            setBotId(matched.id);
+            setBotName(matched.name);
+            return;
+          }
+        }
+        // 3. Default
+        const def = bots.find((b) => b.id === DEFAULT_BOT_ID);
+        if (def) setBotName(def.name);
+      } catch {
+        /* network errors: keep defaults */
+      }
+    };
+    resolveBotId();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const ws = useWebSocket();
 
   // Initial REST fetch — populates state before first WS push arrives.
@@ -258,7 +310,7 @@ export default function StrategyPage() {
             {">"} live strategy console
           </div>
           <h1 style={{ margin: "0.25rem 0" }}>
-            <span className="accent">LaT-PFN Momentum</span>
+            <span className="accent">{botName}</span>
           </h1>
           <p className="dim" style={{ margin: 0, fontSize: "0.85rem" }}>
             zero-shot forecasting · self-tuning threshold · live ws stream{" "}

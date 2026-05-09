@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { api, ApiError, getUserEmail } from "@/lib/api";
 import type { Bot } from "@/lib/types";
 
 function RiskBars({ level }: { level: number }) {
@@ -58,15 +60,65 @@ export default function BotCard({ bot }: { bot: Bot }) {
           <div>{instruments.join(", ") || "—"}</div>
         </div>
       </div>
-      <div>
-        <Link
-          href={`/connect?bot=${encodeURIComponent(bot.slug)}`}
-          className="btn btn-primary"
-          style={{ textDecoration: "none" }}
-        >
-          Subscribe
-        </Link>
-      </div>
+      <SubscribeButton bot={bot} />
     </article>
+  );
+}
+
+function SubscribeButton({ bot }: { bot: Bot }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const onClick = async () => {
+    setErr(null);
+    if (!getUserEmail()) {
+      // Not logged in — send to strategy page; EmailGate prompts there.
+      window.location.href = `/strategy?bot=${encodeURIComponent(bot.slug)}`;
+      return;
+    }
+    setBusy(true);
+    try {
+      // Default aggression = 5 (balanced). User can change on /strategy slider.
+      await api.subscribeToBot(bot.id, 5);
+    } catch (e) {
+      // 409 (already subscribed) is fine — keep going.
+      if (!(e instanceof ApiError) || e.status !== 409) {
+        setErr((e as Error)?.message || "subscribe failed");
+        setBusy(false);
+        return;
+      }
+    }
+    // Either created or already-existed — go to strategy view for this bot.
+    window.location.href = `/strategy?bot=${encodeURIComponent(bot.slug)}`;
+  };
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={onClick}
+        disabled={busy}
+      >
+        {busy ? "subscribing..." : "Subscribe"}
+      </button>
+      {err && (
+        <p className="danger" style={{ marginTop: "0.4rem", fontSize: "0.78rem" }}>
+          {err}
+        </p>
+      )}
+      {/* Keep a quiet escape hatch for users who want to connect Genesis FX first. */}
+      <Link
+        href={`/connect?bot=${encodeURIComponent(bot.slug)}`}
+        className="dim"
+        style={{
+          fontSize: "0.72rem",
+          textDecoration: "underline",
+          marginLeft: "0.6rem",
+        }}
+      >
+        connect broker first
+      </Link>
+    </div>
   );
 }
