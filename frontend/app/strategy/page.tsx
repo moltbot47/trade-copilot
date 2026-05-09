@@ -21,8 +21,8 @@ import type {
 } from "@/lib/types";
 import type { StrategyEvent, WsChannel } from "@/lib/ws-types";
 
-const DEFAULT_BOT_ID = 4; // LaT-PFN Momentum (seeded by seed_latpfn_bot.py)
-const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "NAS100", "EURUSD"];
+const DEFAULT_BOT_ID = 5; // LaT-PFN Quant Trader (most advanced — pyramiding + scale-out + trail SL)
+const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD"];  // crypto-only by default; quant fires aggressively on these
 // Equity is still REST-fetched on mount + when state changes — there's no
 // dedicated equity channel in the WS protocol v1.
 const EQUITY_REFRESH_MS = 30_000;

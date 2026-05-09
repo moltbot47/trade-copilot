@@ -688,11 +688,22 @@ class QuantRunner:
 
         client = TradeLockerClient(env="demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
+
+        # Honor whatever threshold is currently in StrategyState — set by
+        # the seed (0.5), per-run override on /strategy/start, or feedback
+        # adjuster.
+        threshold = self._read_threshold(default=0.5)
+        logger.info(
+            "quant runner bot=%s tf=%s using threshold=%.2f",
+            self.bot_id,
+            self.timeframe,
+            threshold,
+        )
         strategy = LatPFNQuantStrategy(
             bot_id=self.bot_id,
             timeframe=self.timeframe,
             latpfn_client=latpfn_client,
-            threshold=1.5,
+            threshold=threshold,
         )
 
         feed_user = self._load_first_authed_user()
