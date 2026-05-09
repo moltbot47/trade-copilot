@@ -40,9 +40,20 @@ async def connect(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StatusResponse:
+    """Idempotent connect — running it twice with same or different creds is safe.
+
+    Flow:
+      1. Authenticate against TradeLocker.
+      2. If user already has a relay running, stop it.
+      3. Save new creds (encrypted).
+      4. Start fresh relay.
+    Errors are caught and surfaced as 4xx with friendly messages. The
+    global 500 handler should not fire for any expected condition here.
+    """
     # Stash for the rate-limit key (effective on the NEXT request from
     # this user; first hit keys on IP-only, which is also fine).
     request.state.auth_email = user.email
+
     client = TradeLockerClient(env=payload.env)
     try:
         result = await client.authenticate(payload.email, payload.password, payload.server)
@@ -60,23 +71,46 @@ async def connect(
             user_msg = "Connection failed. Verify your credentials and server."
         raise HTTPException(status_code=400, detail=user_msg)
 
-    user.tradelocker_email = encrypt(payload.email)
-    user.tradelocker_token = encrypt(result.get("access_token"))
-    user.tradelocker_refresh_token = encrypt(result.get("refresh_token"))
-    user.tradelocker_account_id = result.get("account_id")
-    user.tradelocker_acc_num = result.get("acc_num") or "1"
-    user.tradelocker_server = payload.server
-    user.tradelocker_env = payload.env
-    db.commit()
+    access_token = result.get("access_token")
+    if not access_token:
+        # Should never happen — TradeLockerClient.authenticate raises if it
+        # can't find a token. Defensive 502 because it's an upstream issue.
+        logger.error("tradelocker authenticate returned no access_token: %s", result)
+        raise HTTPException(status_code=502, detail="Broker auth returned no token.")
 
-    # Kick off the TradeLocker → WS relay in the background so subscribed
-    # WebSocket clients start receiving account/positions events immediately.
-    # Fire-and-forget — failures must not block the HTTP response.
+    # Stop any existing relay BEFORE we swap credentials so it doesn't
+    # keep using stale tokens. Idempotent — no-op if no relay is running.
+    try:
+        from app.ws.relay_manager import relay_manager
+
+        await relay_manager.stop_for_user(user.id)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("relay stop on reconnect failed (non-fatal): %s", exc)
+
+    # Save new creds. Wrap in a fine-grained try so we don't 500 on a
+    # transient DB or encryption failure.
+    try:
+        user.tradelocker_email = encrypt(payload.email)
+        user.tradelocker_token = encrypt(access_token)
+        user.tradelocker_refresh_token = (
+            encrypt(result.get("refresh_token")) if result.get("refresh_token") else None
+        )
+        user.tradelocker_account_id = result.get("account_id")
+        user.tradelocker_acc_num = result.get("acc_num") or "1"
+        user.tradelocker_server = payload.server
+        user.tradelocker_env = payload.env
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("connect: failed to persist credentials: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not save credentials. Try again.")
+
+    # Start the new relay. Fire-and-forget; never block the response.
     try:
         from app.ws.relay_manager import relay_manager
 
         relay_manager.start_for_user(user.id)
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover
         logger.debug("relay_manager.start_for_user skipped: %s", exc)
 
     return StatusResponse(status="connected", detail=user.tradelocker_account_id or "")

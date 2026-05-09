@@ -31,6 +31,44 @@ from app.db.models import Cohort, CohortLeg, CohortStatus
 logger = logging.getLogger(__name__)
 
 
+def _ws_publish_sl_moved(
+    *,
+    user_id: int,
+    position_id: Optional[str],
+    symbol: str,
+    side: str,
+    old_sl: Optional[float],
+    new_sl: float,
+    favorable_R: float,
+    reason: str,
+) -> None:
+    """Best-effort publish of an SL move onto the `positions` WS channel.
+
+    The frontend ActivityLog already handles `kind: "sl_moved"` events.
+    Silently no-op if the event bus or asyncio is unavailable so the
+    ratchet itself is never blocked by telemetry.
+    """
+    try:
+        import asyncio
+        from app.ws.event_bus import event_bus
+
+        payload = {
+            "kind": "sl_moved",
+            "position_id": position_id,
+            "symbol": symbol,
+            "side": side,
+            "old_sl": old_sl,
+            "new_sl": new_sl,
+            "favorable_R": favorable_R,
+            "reason": reason,
+        }
+        result = event_bus.publish("positions", user_id, payload)
+        if asyncio.iscoroutine(result):
+            asyncio.ensure_future(result)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("ws publish sl_moved failed user=%s: %s", user_id, exc)
+
+
 # Tuning knobs — exposed as class attrs so tests can override.
 SCALE_IN_R_THRESHOLD = 0.5         # +0.5R favorable
 SCALE_OUT_R_THRESHOLD = 1.0        # +1.0R hits TP1 → close 50%
@@ -254,13 +292,36 @@ class TradeManager:
         self.db.flush()
         return leg
 
-    def update_stop(self, cohort: Cohort, new_stop: float) -> None:
+    def update_stop(self, cohort: Cohort, new_stop: float, reason: str = "trail_stop") -> None:
+        prev_stop = cohort.current_stop
         cohort.current_stop = float(new_stop)
+        moved_legs: list[tuple[Optional[str], Optional[float]]] = []
         for leg in cohort.legs:
             if leg.is_open and leg.role in ("entry", "scale_in"):
+                old = float(leg.stop_loss) if leg.stop_loss is not None else None
                 leg.stop_loss = float(new_stop)
-        cohort.last_action = "trail_stop"
+                moved_legs.append((leg.tradelocker_position_id, old))
+        cohort.last_action = reason
         self.db.flush()
+        # Publish each moved leg as a separate WS event so the ActivityLog
+        # renders an SL row per position.
+        avg_entry = cohort.weighted_avg_entry
+        favorable_r = (
+            (float(new_stop) - avg_entry) / max(_r_distance(cohort), 1e-9)
+            if cohort.side == "buy"
+            else (avg_entry - float(new_stop)) / max(_r_distance(cohort), 1e-9)
+        )
+        for pos_id, old_sl in moved_legs:
+            _ws_publish_sl_moved(
+                user_id=cohort.user_id,
+                position_id=pos_id,
+                symbol=cohort.instrument,
+                side=cohort.side,
+                old_sl=old_sl,
+                new_sl=float(new_stop),
+                favorable_R=favorable_r,
+                reason=reason,
+            )
 
     def close_cohort(
         self, cohort: Cohort, close_price: float, reason: str = "exit_all"
@@ -558,6 +619,18 @@ class TradeManager:
                         float(target_sl) if target_sl < cur else cur
                     )
                 cohort.last_action = "trail_ratchet"
+                # Publish to WS so /strategy ActivityLog renders an SL row.
+                # Best-effort — never let a publish failure block the ratchet.
+                _ws_publish_sl_moved(
+                    user_id=cohort.user_id,
+                    position_id=leg.tradelocker_position_id,
+                    symbol=cohort.instrument,
+                    side=cohort.side,
+                    old_sl=old_sl,
+                    new_sl=float(target_sl),
+                    favorable_R=float(hw_r),
+                    reason="trail_ratchet",
+                )
                 updates.append(
                     {
                         "leg_id": leg.id,
