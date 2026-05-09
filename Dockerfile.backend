@@ -52,6 +52,7 @@ COPY --from=builder /install /usr/local
 COPY --chown=app:app backend/app          ./app
 COPY --chown=app:app backend/seed_bots.py        ./seed_bots.py
 COPY --chown=app:app backend/seed_latpfn_bot.py  ./seed_latpfn_bot.py
+COPY --chown=app:app backend/seed_quant_bot.py   ./seed_quant_bot.py
 COPY --chown=app:app backend/scripts             ./scripts
 
 # Persistent SQLite mount point
