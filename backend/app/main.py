@@ -87,6 +87,20 @@ def _seed_starter_bots() -> None:
         db.close()
 
 
+def _seed_advanced_bots() -> None:
+    """Idempotent seed of LaT-PFN momentum + quant bots."""
+    import importlib
+    for mod_name in ("seed_latpfn_bot", "seed_quant_bot"):
+        try:
+            # The seed scripts live at /app at runtime (see Dockerfile.backend)
+            # and import app.* — they're safe to import-as-script here.
+            mod = importlib.import_module(mod_name)
+            if hasattr(mod, "main"):
+                mod.main()
+        except Exception as exc:  # never crash on seed
+            logger.warning("seed %s failed: %s", mod_name, exc)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     get_settings().assert_production_safe()
@@ -95,6 +109,7 @@ async def lifespan(_: FastAPI):
         _seed_starter_bots()
     except Exception as exc:  # never crash the app on seed failure
         logger.warning("seed_starter_bots failed: %s", exc)
+    _seed_advanced_bots()
     yield
 
 
