@@ -11,6 +11,7 @@ import StatsCard from "@/components/StatsCard";
 import TradeLogTable from "@/components/TradeLogTable";
 import FeedbackLogTable from "@/components/FeedbackLogTable";
 import OpenPositionsTable from "@/components/OpenPositionsTable";
+import ActivityLog from "@/components/ActivityLog";
 import type {
   StrategyState,
   StrategyTimeframe,
@@ -433,6 +434,9 @@ export default function StrategyPage() {
         </p>
         <FeedbackLogTable snapshots={snapshots} limit={5} />
       </section>
+
+      {/* Activity log — live event stream from WS (Wave 5C) */}
+      <ActivityLog timeframe={timeframe} />
     </div>
   );
 }

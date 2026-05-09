@@ -1,6 +1,9 @@
 """Unit tests for TradeManager — cohort lifecycle, weighted-avg math, decisions."""
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -299,6 +302,201 @@ def test_short_side_evaluate_partial_close(session, setup):
     cmd = tm.evaluate(c, current_price=79600.0, forecast_drift=-0.6, forecast_confidence=2.0)
     assert cmd is not None
     assert cmd.kind == "partial_close"
+
+
+def _trailing_setup_buy(session, setup, *, ratchet_to_partial: bool = True):
+    """Helper: open a long cohort and put it into partial/trailing state."""
+    tm = TradeManager(session, setup["bot_id"], setup["user_id"], "1m")
+    c = tm.open_cohort(
+        instrument="BTCUSD",
+        side="buy",
+        entry_price=80000.0,
+        atr=400.0,  # 1R = 400
+        qty=0.04,
+        stop_loss=79600.0,
+        take_profit=84000.0,  # 10R away — leaves room for ratchet
+        tl_position_id="POS_ENTRY",
+    )
+    session.commit()
+    if ratchet_to_partial:
+        tm.record_partial_close(c, qty_closed=0.02, close_price=80400.0)
+        tm.update_stop(c, 80000.0)  # break-even
+        for leg in c.legs:
+            if leg.role == "entry":
+                leg.stop_loss = 80000.0
+                leg.tradelocker_position_id = "POS_ENTRY"
+        session.commit()
+    return tm, c
+
+
+def test_ratchet_does_not_fire_at_exactly_1R(session, setup):
+    """At +1R the ratchet trigger (1.5R) is NOT crossed — no broker call."""
+    tm, c = _trailing_setup_buy(session, setup)
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 80400.0))
+    assert updates == []
+    mock_client.modify_position.assert_not_called()
+
+
+def test_ratchet_fires_at_1_5R_to_plus_0_5R(session, setup):
+    """At +1.5R, SL should ratchet to +0.5R (entry + 0.5*R)."""
+    tm, c = _trailing_setup_buy(session, setup)
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    # +1.5R favorable (price 80600). target_sl_R = 0.5 → SL = 80000 + 0.5*400 = 80200
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 80600.0))
+    assert len(updates) == 1
+    upd = updates[0]
+    assert upd["new_sl"] == pytest.approx(80200.0)
+    assert upd["favorable_R"] == pytest.approx(1.5)
+    assert mock_client.modify_position.called
+    call = mock_client.modify_position.call_args
+    assert call.kwargs["stop_loss"] == pytest.approx(80200.0)
+    assert call.kwargs["token"] == "t"
+    assert call.kwargs["acc_num"] == "1"
+
+
+def test_ratchet_fires_at_2R_to_plus_1R(session, setup):
+    """At +2R, SL should ratchet to +1R (= weighted_avg + 1*R)."""
+    tm, c = _trailing_setup_buy(session, setup)
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    # +2R favorable (price 80800). target_sl_R = 1.0 → SL = 80000 + 1.0*400 = 80400
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 80800.0))
+    assert len(updates) == 1
+    assert updates[0]["new_sl"] == pytest.approx(80400.0)
+    assert updates[0]["favorable_R"] == pytest.approx(2.0)
+
+
+def test_ratchet_holds_high_water_after_pullback(session, setup):
+    """High of +2.5R locks SL at +1.5R; later +1.8R must NOT lower SL."""
+    tm, c = _trailing_setup_buy(session, setup)
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    # First push: +2.5R high (price = 80000 + 2.5*400 = 81000) → SL = +1.5R = 80600
+    asyncio.run(tm.update_trailing_ratchet("BTCUSD", 81000.0))
+    assert mock_client.modify_position.call_count == 1
+    high_water_call = mock_client.modify_position.call_args
+    assert high_water_call.kwargs["stop_loss"] == pytest.approx(80600.0)
+
+    # Pullback to +1.8R (price = 80720) — SL must hold at 80600, no broker call
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 80720.0))
+    assert updates == []
+    assert mock_client.modify_position.call_count == 1
+
+
+def test_ratchet_short_side(session, setup):
+    """Short cohort ratchet — verify symmetric math."""
+    tm = TradeManager(session, setup["bot_id"], setup["user_id"], "1m")
+    c = tm.open_cohort(
+        instrument="BTCUSD",
+        side="sell",
+        entry_price=80000.0,
+        atr=400.0,
+        qty=0.04,
+        stop_loss=80400.0,
+        take_profit=76000.0,
+        tl_position_id="POS_ENTRY_S",
+    )
+    session.commit()
+    tm.record_partial_close(c, qty_closed=0.02, close_price=79600.0)
+    tm.update_stop(c, 80000.0)
+    for leg in c.legs:
+        if leg.role == "entry":
+            leg.stop_loss = 80000.0
+            leg.tradelocker_position_id = "POS_ENTRY_S"
+    session.commit()
+
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    # +2R favorable for short = price drops 800 → 79200.
+    # target_sl_R = 1.0 → SL = 80000 - 1.0*400 = 79600
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 79200.0))
+    assert len(updates) == 1
+    assert updates[0]["new_sl"] == pytest.approx(79600.0)
+    assert mock_client.modify_position.call_args.kwargs["stop_loss"] == pytest.approx(79600.0)
+
+
+def test_ratchet_updates_each_leg_independently(session, setup):
+    """A cohort with two open legs (entry + scale-in) ratchets both."""
+    tm = TradeManager(session, setup["bot_id"], setup["user_id"], "1m")
+    c = tm.open_cohort(
+        instrument="BTCUSD",
+        side="buy",
+        entry_price=80000.0,
+        atr=400.0,
+        qty=0.02,
+        stop_loss=79600.0,
+        take_profit=84000.0,
+        tl_position_id="POS_A",
+    )
+    session.commit()
+    tm.add_scale_in_leg(
+        c,
+        entry_price=80000.0,
+        qty=0.02,
+        stop_loss=79600.0,
+        tl_position_id="POS_B",
+    )
+    session.commit()
+    tm.record_partial_close(c, qty_closed=0.02, close_price=80400.0)
+    tm.update_stop(c, 80000.0)
+    for leg in c.legs:
+        if leg.role in ("entry", "scale_in"):
+            leg.stop_loss = 80000.0
+    session.commit()
+
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    # +2R → SL = +1R = 80400 on every open entry/scale_in leg
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 80800.0))
+    assert len(updates) == 2
+    assert mock_client.modify_position.call_count == 2
+    pos_ids_called = {
+        call.args[0] for call in mock_client.modify_position.call_args_list
+    }
+    assert pos_ids_called == {"POS_A", "POS_B"}
+    for upd in updates:
+        assert upd["new_sl"] == pytest.approx(80400.0)
+
+
+def test_ratchet_skips_when_no_broker_context(session, setup):
+    """Without client/token/acc_num, ratchet still updates DB but no broker call."""
+    tm, c = _trailing_setup_buy(session, setup)
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 80800.0))
+    assert len(updates) == 1
+    assert updates[0]["new_sl"] == pytest.approx(80400.0)
+
+
+def test_ratchet_caps_at_max_R(session, setup):
+    """Even at +10R, the ratchet target must not exceed the configured cap (5R)."""
+    tm, c = _trailing_setup_buy(session, setup)
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    # +10R favorable (price 84000) — without cap target_sl_R=9. With cap=5,
+    # SL = entry + 5*R = 80000 + 5*400 = 82000.
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 84000.0))
+    assert len(updates) == 1
+    assert updates[0]["new_sl"] == pytest.approx(82000.0)
+
+
+def test_ratchet_only_runs_for_partial_cohorts(session, setup):
+    """Cohort still in 'open' state must not trigger ratchet."""
+    tm, c = _trailing_setup_buy(session, setup, ratchet_to_partial=False)
+    mock_client = AsyncMock()
+    tm.set_broker_context(mock_client, token="t", acc_num="1")
+
+    updates = asyncio.run(tm.update_trailing_ratchet("BTCUSD", 81000.0))
+    assert updates == []
+    mock_client.modify_position.assert_not_called()
 
 
 def test_list_open_cohorts_filters_by_status(session, setup):

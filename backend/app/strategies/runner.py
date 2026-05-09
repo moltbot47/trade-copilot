@@ -660,7 +660,27 @@ class QuantRunner:
                 pass
         _RUNNERS.pop((self.bot_id, self.timeframe), None)
 
+        # Mark StrategyState.is_running=False so the dashboard reflects it.
+        db = self.db_session_factory()
+        try:
+            state = (
+                db.query(StrategyState)
+                .filter(
+                    StrategyState.bot_id == self.bot_id,
+                    StrategyState.timeframe == self.timeframe,
+                )
+                .first()
+            )
+            if state is not None:
+                state.is_running = False
+                db.commit()
+        finally:
+            db.close()
+
     async def run_loop(self) -> None:
+        # Init: ensure StrategyState exists, mark running
+        await self._init_state()
+
         client = TradeLockerClient(env="demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
         strategy = LatPFNQuantStrategy(
@@ -673,6 +693,7 @@ class QuantRunner:
         feed_user = self._load_first_authed_user()
         if feed_user is None:
             logger.warning("quant runner bot=%s tf=%s: no authed user", self.bot_id, self.timeframe)
+            self._record_error("no authenticated user for data feed")
             return
         bar_fetcher = BarFetcher(
             client=client,
@@ -687,8 +708,10 @@ class QuantRunner:
         while not self._stop.is_set():
             try:
                 await self._tick(strategy, bar_fetcher, client)
+                self._touch_tick()
             except Exception as exc:
                 logger.exception("quant runner tick failed: %s", exc)
+                self._record_error(str(exc)[:500])
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_seconds)
             except asyncio.TimeoutError:
@@ -795,6 +818,23 @@ class QuantRunner:
         logger.info(
             "cohort %s opened %s %s qty=%.4f entry=%.2f", cohort.id, sig.side, sig.symbol, sig.qty, sig.entry_price
         )
+        # Reflect signal time on StrategyState + push WS event.
+        self._touch_signal()
+        signal_event = {
+            "bot_id": self.bot_id,
+            "symbol": sig.symbol,
+            "side": sig.side,
+            "confidence": sig.forecast_confidence,
+            "drift": sig.forecast_drift,
+            "threshold": sig.threshold,
+            "entry_price": sig.entry_price,
+            "stop_loss": sig.stop_loss,
+            "take_profit": sig.take_profit,
+            "timeframe": self.timeframe,
+            "kind": "entry",
+            "cohort_id": cohort.id,
+        }
+        _ws_publish("signals", user.id, signal_event)
 
     async def _execute_command(
         self,
@@ -911,7 +951,90 @@ class QuantRunner:
                         logger.warning("close leg %s failed: %s", leg.id, exc)
             tm.close_cohort(cohort, current_price, reason=cmd.reason or "exit_all")
 
+        # Any executed cohort command counts as a signal-level action.
+        self._touch_signal()
+
     # ---------- helpers ----------
+
+    async def _init_state(self) -> None:
+        db = self.db_session_factory()
+        try:
+            state = (
+                db.query(StrategyState)
+                .filter(
+                    StrategyState.bot_id == self.bot_id,
+                    StrategyState.timeframe == self.timeframe,
+                )
+                .first()
+            )
+            if state is None:
+                state = StrategyState(
+                    bot_id=self.bot_id,
+                    timeframe=self.timeframe,
+                    is_running=True,
+                    confidence_threshold=1.5,
+                    started_at=datetime.utcnow(),
+                )
+                db.add(state)
+            else:
+                state.is_running = True
+                state.started_at = datetime.utcnow()
+                state.last_error = None
+                state.paused_until = None
+            db.commit()
+        finally:
+            db.close()
+
+    def _touch_tick(self) -> None:
+        db = self.db_session_factory()
+        try:
+            state = (
+                db.query(StrategyState)
+                .filter(
+                    StrategyState.bot_id == self.bot_id,
+                    StrategyState.timeframe == self.timeframe,
+                )
+                .first()
+            )
+            if state is not None:
+                state.last_tick_at = datetime.utcnow()
+                db.commit()
+        finally:
+            db.close()
+
+    def _touch_signal(self) -> None:
+        db = self.db_session_factory()
+        try:
+            state = (
+                db.query(StrategyState)
+                .filter(
+                    StrategyState.bot_id == self.bot_id,
+                    StrategyState.timeframe == self.timeframe,
+                )
+                .first()
+            )
+            if state is not None:
+                state.last_signal_at = datetime.utcnow()
+                db.commit()
+        finally:
+            db.close()
+
+    def _record_error(self, msg: str) -> None:
+        db = self.db_session_factory()
+        try:
+            state = (
+                db.query(StrategyState)
+                .filter(
+                    StrategyState.bot_id == self.bot_id,
+                    StrategyState.timeframe == self.timeframe,
+                )
+                .first()
+            )
+            if state is not None:
+                state.last_error = msg
+                db.commit()
+        finally:
+            db.close()
 
     def _load_users(self) -> list[User]:
         if not self.user_emails:

@@ -16,7 +16,7 @@ from app.db.models import (
     StrategyType,
     TradeOutcome,
 )
-from app.strategies.runner import StrategyRunner, get_runner
+from app.strategies.runner import QuantRunner, StrategyRunner, get_runner
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/strategy", tags=["strategy"])
@@ -40,21 +40,41 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
     bot = db.get(Bot, req.bot_id)
     if bot is None:
         raise HTTPException(404, "bot not found")
-    if bot.strategy_type != StrategyType.latpfn_momentum:
-        raise HTTPException(400, "this strategy runner only supports latpfn_momentum bots")
+    if not getattr(bot, "is_active", True):
+        raise HTTPException(404, "bot not found or inactive")
     if not req.symbols:
         raise HTTPException(400, "symbols list cannot be empty")
     if not req.user_emails:
         raise HTTPException(400, "user_emails list cannot be empty")
 
-    runner = await StrategyRunner.start(
-        db_session_factory=SessionLocal,
-        bot_id=req.bot_id,
-        timeframe=req.timeframe,
-        symbols=req.symbols,
-        user_emails=req.user_emails,
-        latpfn_endpoint=req.latpfn_endpoint,
-    )
+    # Dispatch based on strategy type. TradingView-webhook bots (orb,
+    # squeeze, stoch_hook) are NOT launched via this endpoint — they fire
+    # from the /webhook/{slug} route on every TV alert.
+    if bot.strategy_type == StrategyType.latpfn_momentum:
+        runner = await StrategyRunner.start(
+            db_session_factory=SessionLocal,
+            bot_id=req.bot_id,
+            timeframe=req.timeframe,
+            symbols=req.symbols,
+            user_emails=req.user_emails,
+            latpfn_endpoint=req.latpfn_endpoint,
+        )
+    elif bot.strategy_type == StrategyType.latpfn_quant:
+        runner = await QuantRunner.start(
+            db_session_factory=SessionLocal,
+            bot_id=req.bot_id,
+            timeframe=req.timeframe,
+            symbols=req.symbols,
+            user_emails=req.user_emails,
+            latpfn_endpoint=req.latpfn_endpoint,
+        )
+    else:
+        raise HTTPException(
+            400,
+            f"strategy {bot.strategy_type.value} cannot be started via "
+            "/strategy/start (TradingView-webhook driven)",
+        )
+
     return {
         "status": "started",
         "bot_id": runner.bot_id,
@@ -62,6 +82,7 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
         "symbols": runner.symbols,
         "users": runner.user_emails,
         "task_alive": runner.task is not None and not runner.task.done(),
+        "runner_type": type(runner).__name__,
     }
 
 

@@ -180,6 +180,17 @@ def seed_bots(db_session):
             instruments_csv="BTCUSD,ETHUSD",
             webhook_secret="test-secret-latpfn-momentum",
         ),
+        Bot(
+            name="LaT-PFN Quant Trader",
+            slug="latpfn-quant",
+            description="Pyramiding LaT-PFN with active management",
+            strategy_type=StrategyType.latpfn_quant,
+            backtest_win_rate=63.0,
+            backtest_profit_factor=1.7,
+            risk_level=4,
+            instruments_csv="BTCUSD",
+            webhook_secret="test-secret-latpfn-quant",
+        ),
     ]
     for b in bots:
         db_session.add(b)

@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -39,6 +39,11 @@ TRAIL_LOCK_MIN_R = 0.5             # once trailed past entry, lock min +0.5R
 DRAWDOWN_ATR_LIMIT = 2.0           # cohort avg drawdown > 2×ATR → exit
 SCALE_IN_MAX_LEGS = 3              # entry + 2 scale-ins (hard cap)
 FORECAST_REVERSE_THRESHOLD = 1.5   # opposite-direction forecast > 1.5σ → exit
+
+# Trailing-ratchet tuning (Wave 5B).
+RATCHET_TRIGGER_R = 1.5            # ratchet activates only after price reaches >= 1.5R
+RATCHET_FOLLOW_DISTANCE_R = 1.0    # SL trails 1R behind the high-water mark
+RATCHET_MAX_R_CAP = 5.0            # hard cap on the ratcheted SL R-multiple
 
 
 @dataclass
@@ -93,11 +98,33 @@ class TradeManager:
     the session after invoking methods that mutate Cohort/CohortLeg rows.
     """
 
-    def __init__(self, db: Session, bot_id: int, user_id: int, timeframe: str) -> None:
+    def __init__(
+        self,
+        db: Session,
+        bot_id: int,
+        user_id: int,
+        timeframe: str,
+        client: Optional[Any] = None,
+        token: Optional[str] = None,
+        acc_num: Optional[str] = None,
+    ) -> None:
         self.db = db
         self.bot_id = bot_id
         self.user_id = user_id
         self.timeframe = timeframe
+        # Optional broker context — required only for live methods like
+        # update_trailing_ratchet that call modify_position directly.
+        self.client = client
+        self.token = token
+        self.acc_num = acc_num
+
+    def set_broker_context(
+        self, client: Any, token: str, acc_num: str
+    ) -> None:
+        """Attach a TradeLockerClient + auth so live methods can call the broker."""
+        self.client = client
+        self.token = token
+        self.acc_num = acc_num
 
     # ---------- creation & queries ----------
 
@@ -332,14 +359,34 @@ class TradeManager:
 
         # 2. Trailing stop update (after partial close — i.e. status=partial)
         if cohort.status == CohortStatus.partial:
-            new_stop = self._compute_trail_stop(cohort, current_price)
-            if new_stop is not None and self._is_better_stop(cohort, new_stop):
-                return CohortCommand(
-                    kind="modify_sl",
-                    cohort_id=cohort.id,
-                    new_stop=new_stop,
-                    reason="trail_atr",
-                )
+            # First update high-water mark for the ratchet
+            prior_hw = float(cohort.max_favorable_r_seen or 0.0)
+            if favorable_r > prior_hw:
+                cohort.max_favorable_r_seen = float(favorable_r)
+            hw_r = float(cohort.max_favorable_r_seen or 0.0)
+
+            ratchet_stop = self._ratchet_target_sl(cohort, hw_r)
+            atr_stop = self._compute_trail_stop(cohort, current_price)
+
+            # Pick the tighter of the two trailing methods.
+            candidates = [s for s in (ratchet_stop, atr_stop) if s is not None]
+            if candidates:
+                if cohort.side == "buy":
+                    new_stop = max(candidates)
+                else:
+                    new_stop = min(candidates)
+                if self._is_better_stop(cohort, new_stop):
+                    reason = (
+                        "trail_ratchet"
+                        if ratchet_stop is not None and new_stop == ratchet_stop
+                        else "trail_atr"
+                    )
+                    return CohortCommand(
+                        kind="modify_sl",
+                        cohort_id=cohort.id,
+                        new_stop=new_stop,
+                        reason=reason,
+                    )
 
         # 3. Scale-out (only if still status=open AND we crossed +1R)
         if (
@@ -410,3 +457,123 @@ class TradeManager:
         if cohort.side == "buy":
             return new_stop > cur
         return new_stop < cur
+
+    # ---------- Wave 5B: trailing-take-profit ratchet ----------
+
+    def _ratchet_target_sl(
+        self, cohort: Cohort, favorable_r: float
+    ) -> Optional[float]:
+        """Compute the SL price the ratchet wants, given the favorable R-multiple.
+
+        Spec: when max_favorable_R >= 1.5, target_sl_R = max_favorable_R - 1.0.
+        At +1.5R → SL +0.5R, at +2R → SL +1R, at +3R → SL +2R, capped at +5R.
+        Returns None if the trigger has not been crossed.
+        """
+        if favorable_r < RATCHET_TRIGGER_R:
+            return None
+        target_sl_r = favorable_r - RATCHET_FOLLOW_DISTANCE_R
+        target_sl_r = min(target_sl_r, RATCHET_MAX_R_CAP)
+        if target_sl_r <= 0:
+            return None
+        r = _r_distance(cohort)
+        avg = float(cohort.weighted_avg_entry)
+        if cohort.side == "buy":
+            return avg + target_sl_r * r
+        return avg - target_sl_r * r
+
+    async def update_trailing_ratchet(
+        self, symbol: str, current_price: float
+    ) -> list[dict]:
+        """Per-leg SL ratchet for cohorts in 'partial' (trailing) status.
+
+        Inspects every open cohort in 'partial' state for the given symbol,
+        updates `max_favorable_r_seen` if a new high-water mark is reached,
+        computes a target SL trailing 1R behind the high-water R-multiple,
+        and pushes that SL to the broker per leg if it tightens. Never
+        loosens an existing SL.
+
+        Returns: list of {"leg_id", "old_sl", "new_sl", "favorable_R"} for
+        each leg whose SL was actually moved.
+        """
+        updates: list[dict] = []
+        cohorts = [
+            c
+            for c in self.list_open_cohorts(symbol)
+            if c.status == CohortStatus.partial
+        ]
+        for cohort in cohorts:
+            r = _r_distance(cohort)
+            if r <= 0:
+                continue
+            favorable_r = _favorable_r(cohort, current_price)
+            prior_hw = float(cohort.max_favorable_r_seen or 0.0)
+            if favorable_r > prior_hw:
+                cohort.max_favorable_r_seen = float(favorable_r)
+            hw_r = float(cohort.max_favorable_r_seen or 0.0)
+            target_sl = self._ratchet_target_sl(cohort, hw_r)
+            if target_sl is None:
+                continue
+
+            for leg in cohort.legs:
+                if not leg.is_open or leg.role not in ("entry", "scale_in"):
+                    continue
+                old_sl = float(leg.stop_loss) if leg.stop_loss is not None else None
+                # Skip if the proposed SL would NOT tighten — never lower SL on
+                # a long, never raise SL on a short.
+                if old_sl is not None:
+                    if cohort.side == "buy" and target_sl <= old_sl:
+                        continue
+                    if cohort.side == "sell" and target_sl >= old_sl:
+                        continue
+
+                if (
+                    self.client is not None
+                    and leg.tradelocker_position_id
+                    and self.token
+                    and self.acc_num
+                ):
+                    try:
+                        await self.client.modify_position(
+                            leg.tradelocker_position_id,
+                            token=self.token,
+                            acc_num=self.acc_num,
+                            stop_loss=float(target_sl),
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "ratchet broker modify_position failed leg=%s: %s",
+                            leg.id,
+                            exc,
+                        )
+                        continue
+
+                leg.stop_loss = float(target_sl)
+                if cohort.side == "buy":
+                    cohort.current_stop = max(
+                        float(cohort.current_stop or 0.0), float(target_sl)
+                    )
+                else:
+                    cur = float(cohort.current_stop or float("inf"))
+                    cohort.current_stop = (
+                        float(target_sl) if target_sl < cur else cur
+                    )
+                cohort.last_action = "trail_ratchet"
+                updates.append(
+                    {
+                        "leg_id": leg.id,
+                        "old_sl": old_sl,
+                        "new_sl": float(target_sl),
+                        "favorable_R": float(hw_r),
+                    }
+                )
+                logger.debug(
+                    "ratchet leg=%s old_sl=%s new_sl=%.4f hw_R=%.3f",
+                    leg.id,
+                    old_sl,
+                    target_sl,
+                    hw_r,
+                )
+
+        if updates:
+            self.db.flush()
+        return updates

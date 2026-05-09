@@ -27,7 +27,7 @@ def test_status_for_existing_bot_no_state_returns_empty(client, seed_bots):
 
 
 def test_start_requires_latpfn_bot(client, seed_bots):
-    # ORB bot is NOT a latpfn_momentum strategy → should reject
+    # ORB bot is NOT a latpfn_* strategy → webhook-driven, /start should reject
     orb = next(b for b in seed_bots if b.slug == "orb-breakout")
     res = client.post(
         "/api/strategy/start",
@@ -39,6 +39,7 @@ def test_start_requires_latpfn_bot(client, seed_bots):
         },
     )
     assert res.status_code == 400
+    assert "webhook" in res.json()["detail"].lower()
 
 
 def test_start_unknown_bot_returns_404(client, seed_bots):
@@ -109,6 +110,70 @@ def test_start_launches_runner_with_mock(client, seed_bots):
     body = res.json()
     assert body["status"] == "started"
     assert body["bot_id"] == latpfn.id
+    assert body["runner_type"] == "SimpleNamespace"  # mocked instance class
+
+
+def test_start_dispatches_quant_bot_to_quant_runner(client, seed_bots):
+    """latpfn_quant bot id must be routed to QuantRunner.start, NOT StrategyRunner."""
+    quant = next(b for b in seed_bots if b.slug == "latpfn-quant")
+    fake_task = SimpleNamespace(done=lambda: False)
+    fake_runner = SimpleNamespace(
+        bot_id=quant.id,
+        timeframe="1m",
+        symbols=["BTCUSD"],
+        user_emails=["t@example.com"],
+        task=fake_task,
+    )
+    momentum_mock = AsyncMock(return_value=fake_runner)
+    quant_mock = AsyncMock(return_value=fake_runner)
+    with patch("app.strategies.api.StrategyRunner.start", new=momentum_mock), patch(
+        "app.strategies.api.QuantRunner.start", new=quant_mock
+    ):
+        res = client.post(
+            "/api/strategy/start",
+            json={
+                "bot_id": quant.id,
+                "timeframe": "1m",
+                "symbols": ["BTCUSD"],
+                "user_emails": ["t@example.com"],
+            },
+        )
+    assert res.status_code == 200, res.text
+    quant_mock.assert_awaited_once()
+    momentum_mock.assert_not_called()
+    body = res.json()
+    assert body["status"] == "started"
+    assert body["bot_id"] == quant.id
+
+
+def test_start_dispatches_momentum_bot_to_strategy_runner(client, seed_bots):
+    """latpfn_momentum must hit StrategyRunner, not QuantRunner."""
+    momentum = next(b for b in seed_bots if b.slug == "latpfn-momentum")
+    fake_task = SimpleNamespace(done=lambda: False)
+    fake_runner = SimpleNamespace(
+        bot_id=momentum.id,
+        timeframe="1m",
+        symbols=["BTCUSD"],
+        user_emails=["t@example.com"],
+        task=fake_task,
+    )
+    momentum_mock = AsyncMock(return_value=fake_runner)
+    quant_mock = AsyncMock(return_value=fake_runner)
+    with patch("app.strategies.api.StrategyRunner.start", new=momentum_mock), patch(
+        "app.strategies.api.QuantRunner.start", new=quant_mock
+    ):
+        res = client.post(
+            "/api/strategy/start",
+            json={
+                "bot_id": momentum.id,
+                "timeframe": "1m",
+                "symbols": ["BTCUSD"],
+                "user_emails": ["t@example.com"],
+            },
+        )
+    assert res.status_code == 200, res.text
+    momentum_mock.assert_awaited_once()
+    quant_mock.assert_not_called()
 
 
 def test_stop_when_not_running(client, seed_bots):

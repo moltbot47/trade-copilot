@@ -249,6 +249,7 @@ class Cohort(Base):
     closed_qty: Mapped[float] = mapped_column(Float, default=0.0)  # cumulative scaled-out qty
     current_stop: Mapped[float] = mapped_column(Float, nullable=False)
     trail_high_water: Mapped[float] = mapped_column(Float, default=0.0)  # max favorable price seen
+    max_favorable_r_seen: Mapped[float] = mapped_column(Float, default=0.0)  # high-water R-multiple after partial
 
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
 
