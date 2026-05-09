@@ -773,8 +773,45 @@ class QuantRunner:
                         except Exception as exc:
                             tm_db.rollback()
                             logger.warning("cmd %s on cohort %s failed: %s", cmd.kind, cohort.id, exc)
-                    # 2) Look for new entries (only if no open cohort for this symbol)
+                    # 2) Look for new entries.
+                    # Guards (in order):
+                    #  a) No open cohort on this symbol (any side) — covers
+                    #     normal pyramiding case.
+                    #  b) NO BROKER-LEVEL opposite-side exposure either.
+                    #     Even if our DB shows no open cohort, the broker
+                    #     may still hold lingering opposite-side legs from
+                    #     a recent partial-close. Opening a new directional
+                    #     bet on top of that creates the buy+sell mess we
+                    #     observed in the wild. Skip until exposure clears.
                     if not open_cohorts:
+                        # Quick broker-level check
+                        broker_has_opposite = False
+                        try:
+                            broker_pos = await client.get_positions(
+                                user.tradelocker_account_id,
+                                token,
+                                user.tradelocker_acc_num or "1",
+                            )
+                            tradable_id, _ = await client.resolve_symbol(
+                                user.tradelocker_account_id,
+                                token,
+                                user.tradelocker_acc_num or "1",
+                                symbol,
+                            )
+                            broker_has_opposite = any(
+                                int(p.get("tradableInstrumentId", 0)) == tradable_id
+                                for p in broker_pos
+                            )
+                        except Exception as exc:
+                            logger.debug("broker exposure check failed for %s: %s", symbol, exc)
+
+                        if broker_has_opposite:
+                            logger.info(
+                                "skip new entry for %s — broker still has open exposure",
+                                symbol,
+                            )
+                            continue
+
                         sig = await strategy.on_bar(symbol, bars)
                         if sig is not None and sig.extra.get("kind") == "entry":
                             try:
