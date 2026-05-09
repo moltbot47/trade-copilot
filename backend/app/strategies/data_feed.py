@@ -60,6 +60,37 @@ class BarFetcher:
         self.acc_num = acc_num
         # cache key: (symbol, timeframe) → DataFrame
         self._cache: dict[tuple[str, str], pd.DataFrame] = {}
+        # symbol → INFO route id (separate from TRADE route, used for history)
+        self._info_route_cache: dict[str, int] = {}
+
+    async def _resolve_info_route(self, symbol: str) -> Optional[int]:
+        """Find the INFO-type route for a symbol — different from TRADE route.
+
+        TradeLocker returns each instrument with multiple routes:
+          [{id: 9912, type: 'TRADE'}, {id: 452, type: 'INFO'}, ...]
+        - Order placement uses TRADE (resolve_symbol returns it).
+        - History queries require INFO — using TRADE returns s='error'.
+        """
+        if symbol in self._info_route_cache:
+            return self._info_route_cache[symbol]
+        try:
+            instruments = await self.client.get_instruments(
+                self.account_id, self.token, self.acc_num
+            )
+        except Exception as exc:
+            logger.debug("info-route lookup failed for %s: %s", symbol, exc)
+            return None
+        for inst in instruments:
+            if inst.get("name") == symbol:
+                info = next(
+                    (r for r in inst.get("routes", []) if r.get("type") == "INFO"),
+                    None,
+                )
+                if info:
+                    rid = int(info["id"])
+                    self._info_route_cache[symbol] = rid
+                    return rid
+        return None
 
     async def fetch_bars(
         self,
@@ -81,18 +112,27 @@ class BarFetcher:
         from_ms = now_ms - span_ms
 
         try:
-            tradable_id, route_id = await self.client.resolve_symbol(
+            tradable_id, _trade_route_id = await self.client.resolve_symbol(
                 self.account_id, self.token, self.acc_num, symbol
             )
         except TradeLockerError as exc:
             logger.warning("resolve_symbol failed for %s: %s — using synthetic", symbol, exc)
             return self._synthetic(symbol, timeframe, count)
 
+        # History needs the INFO route (different from TRADE route).
+        info_route_id = await self._resolve_info_route(symbol)
+        if info_route_id is None:
+            logger.warning(
+                "no INFO route for %s — falling back to TRADE route (history may fail)",
+                symbol,
+            )
+            info_route_id = _trade_route_id
+
         # Try the known endpoint variants
         for resolution in _TF_CANDIDATES.get(timeframe, [timeframe]):
             df = await self._try_history(
                 tradable_id=tradable_id,
-                route_id=route_id,
+                route_id=info_route_id,
                 resolution=resolution,
                 from_ms=from_ms,
                 to_ms=now_ms,
