@@ -64,7 +64,7 @@ def main() -> None:
                         bot_id=bot.id,
                         timeframe=tf,
                         is_running=False,
-                        confidence_threshold=1.5,
+                        confidence_threshold=0.5,  # demo-friendly: fires on real BTC/ETH momentum
                         max_concurrent=3,
                     )
                 )

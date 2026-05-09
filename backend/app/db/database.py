@@ -7,7 +7,8 @@ the psycopg2 driver and ``sslmode=require`` is appended if missing
 """
 from __future__ import annotations
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -57,6 +58,23 @@ else:
 
 engine = create_engine(_engine_url, connect_args=connect_args, future=True, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
+
+
+# SQLite WAL mode — required to avoid "database is locked" errors under
+# concurrent writes (the QuantRunner status update + the TradeLocker
+# relay's account-state poll both write to strategy_state every few
+# seconds). WAL allows concurrent readers and a single writer without
+# blocking. Has no effect on Postgres.
+if _engine_url.startswith("sqlite"):
+    @event.listens_for(Engine, "connect")
+    def _sqlite_pragmas(dbapi_conn, _connection_record):  # pragma: no cover
+        cur = dbapi_conn.cursor()
+        try:
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.execute("PRAGMA busy_timeout=5000")
+        finally:
+            cur.close()
 
 
 class Base(DeclarativeBase):

@@ -442,7 +442,8 @@ class StrategyRunner:
         finally:
             db.close()
 
-    def _record_error(self, msg: str) -> None:
+    def _safe_state_update(self, mutator: callable, label: str) -> None:
+        """Run a state-row mutator inside a short-lived session — never crash."""
         db = self.db_session_factory()
         try:
             state = (
@@ -454,27 +455,31 @@ class StrategyRunner:
                 .first()
             )
             if state is not None:
-                state.last_error = msg
+                mutator(state)
                 db.commit()
+        except Exception as exc:  # noqa: BLE001
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning("runner state update %s failed (continuing): %s", label, exc)
         finally:
-            db.close()
+            try:
+                db.close()
+            except Exception:
+                pass
+
+    def _record_error(self, msg: str) -> None:
+        self._safe_state_update(
+            lambda s: setattr(s, "last_error", msg),
+            "last_error",
+        )
 
     def _touch_tick(self, _outcome_count: int) -> None:
-        db = self.db_session_factory()
-        try:
-            state = (
-                db.query(StrategyState)
-                .filter(
-                    StrategyState.bot_id == self.bot_id,
-                    StrategyState.timeframe == self.timeframe,
-                )
-                .first()
-            )
-            if state is not None:
-                state.last_tick_at = datetime.utcnow()
-                db.commit()
-        finally:
-            db.close()
+        self._safe_state_update(
+            lambda s: setattr(s, "last_tick_at", datetime.utcnow()),
+            "last_tick_at",
+        )
 
     def _load_users(self, db: Session) -> list[User]:
         if not self.user_emails:
@@ -985,7 +990,14 @@ class QuantRunner:
         finally:
             db.close()
 
-    def _touch_tick(self) -> None:
+    def _safe_state_update(self, mutator: callable, label: str) -> None:
+        """Run a state-row mutator inside its own short-lived session.
+
+        Swallows DB errors (lock, transient connection issue) and logs at
+        WARNING — a single status-update failure must NEVER kill the
+        runner's asyncio task. The strategy keeps trading; the dashboard
+        just misses one tick of the indicator.
+        """
         db = self.db_session_factory()
         try:
             state = (
@@ -997,44 +1009,37 @@ class QuantRunner:
                 .first()
             )
             if state is not None:
-                state.last_tick_at = datetime.utcnow()
+                mutator(state)
                 db.commit()
+        except Exception as exc:  # noqa: BLE001 — best effort
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning("runner state update %s failed (continuing): %s", label, exc)
         finally:
-            db.close()
+            try:
+                db.close()
+            except Exception:
+                pass
+
+    def _touch_tick(self) -> None:
+        self._safe_state_update(
+            lambda s: setattr(s, "last_tick_at", datetime.utcnow()),
+            "last_tick_at",
+        )
 
     def _touch_signal(self) -> None:
-        db = self.db_session_factory()
-        try:
-            state = (
-                db.query(StrategyState)
-                .filter(
-                    StrategyState.bot_id == self.bot_id,
-                    StrategyState.timeframe == self.timeframe,
-                )
-                .first()
-            )
-            if state is not None:
-                state.last_signal_at = datetime.utcnow()
-                db.commit()
-        finally:
-            db.close()
+        self._safe_state_update(
+            lambda s: setattr(s, "last_signal_at", datetime.utcnow()),
+            "last_signal_at",
+        )
 
     def _record_error(self, msg: str) -> None:
-        db = self.db_session_factory()
-        try:
-            state = (
-                db.query(StrategyState)
-                .filter(
-                    StrategyState.bot_id == self.bot_id,
-                    StrategyState.timeframe == self.timeframe,
-                )
-                .first()
-            )
-            if state is not None:
-                state.last_error = msg
-                db.commit()
-        finally:
-            db.close()
+        self._safe_state_update(
+            lambda s: setattr(s, "last_error", msg),
+            "last_error",
+        )
 
     def _load_users(self) -> list[User]:
         if not self.user_emails:

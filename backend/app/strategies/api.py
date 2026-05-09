@@ -28,6 +28,9 @@ class StartReq(BaseModel):
     symbols: list[str]
     user_emails: list[str]
     latpfn_endpoint: Optional[str] = None
+    # Optional per-run threshold override (writes to StrategyState before
+    # the runner starts). Useful for live demos on calm markets.
+    threshold: Optional[float] = None
 
 
 class StopReq(BaseModel):
@@ -46,6 +49,28 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(400, "symbols list cannot be empty")
     if not req.user_emails:
         raise HTTPException(400, "user_emails list cannot be empty")
+
+    # Optional threshold override — write to StrategyState before runner spawns.
+    if req.threshold is not None:
+        if not (0.1 <= req.threshold <= 5.0):
+            raise HTTPException(400, "threshold must be between 0.1 and 5.0")
+        state = (
+            db.query(StrategyState)
+            .filter(StrategyState.bot_id == req.bot_id, StrategyState.timeframe == req.timeframe)
+            .first()
+        )
+        if state is None:
+            state = StrategyState(
+                bot_id=req.bot_id,
+                timeframe=req.timeframe,
+                is_running=False,
+                confidence_threshold=req.threshold,
+                max_concurrent=3,
+            )
+            db.add(state)
+        else:
+            state.confidence_threshold = req.threshold
+        db.commit()
 
     # Dispatch based on strategy type. TradingView-webhook bots (orb,
     # squeeze, stoch_hook) are NOT launched via this endpoint — they fire

@@ -53,6 +53,14 @@ export class ApiError extends Error {
   }
 }
 
+async function _doFetch(path: string, init: RequestInit): Promise<Response> {
+  return fetch(`${BASE_URL}${path}`, {
+    ...init,
+    // Send/receive the tc_session cookie cross-origin.
+    credentials: "include",
+  });
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {}
@@ -62,18 +70,35 @@ async function request<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${BASE_URL}${path}`, {
-      ...init,
-      headers,
-      // Send/receive the tc_session cookie cross-origin.
-      credentials: "include",
-    });
-  } catch (err) {
-    // Network/CORS/DNS failure — fetch itself rejected. This is NOT a
-    // signal that the backend is offline; it just means the browser
-    // could not complete the round-trip.
+  // Cold-start retry: Fly auto-stops idle machines and the first request
+  // after sleep can take 5-15s OR fail with a network error while the
+  // proxy waits for the machine to come up. We retry once with a small
+  // backoff before surfacing a "network" error to the user.
+  const MAX_TRIES = 2;
+  let res: Response | null = null;
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    try {
+      const r = await _doFetch(path, { ...init, headers });
+      // 502/503/504 from Fly's proxy during cold start — retry once.
+      if ((r.status === 502 || r.status === 503 || r.status === 504) && attempt < MAX_TRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
+      res = r;
+      break;
+    } catch {
+      if (attempt < MAX_TRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw new ApiError(
+        "Cannot reach the server. Check your connection.",
+        undefined,
+        "network",
+      );
+    }
+  }
+  if (!res) {
     throw new ApiError(
       "Cannot reach the server. Check your connection.",
       undefined,

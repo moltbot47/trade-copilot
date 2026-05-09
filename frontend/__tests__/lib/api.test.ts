@@ -84,6 +84,9 @@ describe("api wrapper", () => {
   });
 
   it("throws ApiError(kind=network) when fetch itself rejects", async () => {
+    // Client retries once on network error (handles Fly cold-start).
+    // Mock rejections for both attempts.
+    fetchSpy.mockRejectedValueOnce(new TypeError("fail to fetch"));
     fetchSpy.mockRejectedValueOnce(new TypeError("fail to fetch"));
     await expect(api.getBots()).rejects.toMatchObject({
       name: "ApiError",
