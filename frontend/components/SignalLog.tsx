@@ -2,17 +2,19 @@
 
 import type { Signal } from "@/lib/types";
 
-function fmtTime(t: string): string {
+function fmtTime(t: string | null | undefined): string {
+  if (!t) return "—";
   try {
     const d = new Date(t);
-    if (isNaN(d.getTime())) return t;
+    if (isNaN(d.getTime())) return String(t);
     return d.toLocaleTimeString([], { hour12: false });
   } catch {
-    return t;
+    return String(t);
   }
 }
 
-function statusColor(status: string): string {
+function statusColor(status: string | null | undefined): string {
+  if (!status || typeof status !== "string") return "var(--text)";
   const s = status.toLowerCase();
   if (s.includes("fill") || s.includes("open") || s === "filled") return "var(--accent)";
   if (s.includes("pend") || s.includes("queu")) return "var(--warn)";
@@ -42,27 +44,36 @@ export default function SignalLog({ signals }: { signals: Signal[] }) {
           </tr>
         </thead>
         <tbody>
-          {signals.map((s) => (
-            <tr key={s.id}>
-              <td className="dim">{fmtTime(s.time)}</td>
-              <td>{s.bot}</td>
-              <td>{s.instrument}</td>
-              <td
-                style={{
-                  color:
-                    s.side === "BUY"
-                      ? "var(--accent)"
-                      : s.side === "SELL"
-                      ? "var(--danger)"
-                      : "var(--text)",
-                }}
-              >
-                {s.side}
-              </td>
-              <td>{s.entry?.toFixed?.(2) ?? s.entry}</td>
-              <td style={{ color: statusColor(s.status) }}>{s.status}</td>
-            </tr>
-          ))}
+          {signals.map((s, idx) => {
+            // Defensive: position objects (different shape than Signal) may
+            // flow through this component when the dashboard reuses the
+            // signals state for positions. Tolerate missing fields rather
+            // than crashing.
+            const sideUpper =
+              typeof s.side === "string" ? String(s.side).toUpperCase() : "";
+            const sideColor =
+              sideUpper === "BUY"
+                ? "var(--accent)"
+                : sideUpper === "SELL"
+                  ? "var(--danger)"
+                  : "var(--text)";
+            const entry =
+              typeof (s as { entry?: number }).entry === "number"
+                ? (s as { entry: number }).entry.toFixed(2)
+                : (s as { avg_price?: number }).avg_price?.toFixed?.(2) ??
+                  (s as { entry?: unknown }).entry ??
+                  "—";
+            return (
+              <tr key={s.id ?? idx}>
+                <td className="dim">{fmtTime(s.time)}</td>
+                <td>{s.bot ?? ""}</td>
+                <td>{s.instrument ?? ""}</td>
+                <td style={{ color: sideColor }}>{sideUpper || ""}</td>
+                <td>{entry}</td>
+                <td style={{ color: statusColor(s.status) }}>{s.status ?? ""}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
