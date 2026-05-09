@@ -101,10 +101,40 @@ def _seed_advanced_bots() -> None:
             logger.warning("seed %s failed: %s", mod_name, exc)
 
 
+def _apply_lightweight_migrations() -> None:
+    """Add columns to existing tables that SQLAlchemy's create_all skips.
+
+    SQLite's create_all only creates NEW tables — it won't ALTER an existing
+    one to add a column we added in code. This keeps prod schemas in step
+    without dragging in Alembic for trivial column adds.
+    """
+    from sqlalchemy import inspect, text
+
+    pending = [
+        # (table_name, column_name, sqlite_column_def)
+        ("cohorts", "max_favorable_r_seen", "FLOAT DEFAULT 0.0"),
+    ]
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        existing_tables = set(insp.get_table_names())
+        for tbl, col, defn in pending:
+            if tbl not in existing_tables:
+                continue  # create_all will handle it
+            cols = {c["name"] for c in insp.get_columns(tbl)}
+            if col in cols:
+                continue
+            try:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}"))
+                logger.info("migration: added %s.%s", tbl, col)
+            except Exception as exc:  # never crash on migration
+                logger.warning("migration %s.%s failed: %s", tbl, col, exc)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     get_settings().assert_production_safe()
     Base.metadata.create_all(bind=engine)
+    _apply_lightweight_migrations()
     try:
         _seed_starter_bots()
     except Exception as exc:  # never crash the app on seed failure
