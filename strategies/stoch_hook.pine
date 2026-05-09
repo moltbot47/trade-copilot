@@ -1,0 +1,88 @@
+// © Trade Copilot — educational use only
+// See LEGAL.md in repo root. Not financial advice. Past performance != future results.
+//@version=5
+
+// =============================================================================
+// Stochastic Hook Reversal
+// -----------------------------------------------------------------------------
+// Stoch RSI %K crossing %D in oversold/overbought zones is the "hook".
+// Stop = recent 5-bar swing high/low. Target = 1.5R (1.5 * stop distance).
+// =============================================================================
+
+strategy("Trade Copilot — Stoch Hook",
+     overlay         = true,
+     initial_capital = 10000,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 1,
+     pyramiding      = 0,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.02)
+
+// ----------------------------- Inputs ----------------------------------------
+rsiLen     = input.int(14, "RSI length",        minval = 1)
+stochLen   = input.int(14, "Stoch length",      minval = 1)
+kSmooth    = input.int(3,  "%K smoothing",      minval = 1)
+dSmooth    = input.int(3,  "%D smoothing",      minval = 1)
+oversold   = input.int(20, "Oversold level",    minval = 1, maxval = 50)
+overbought = input.int(80, "Overbought level",  minval = 50, maxval = 99)
+swingLen   = input.int(5,  "Swing lookback",    minval = 2)
+rMult      = input.float(1.5, "Target R-multiple", step = 0.1)
+botSecret  = input.string("stoch-hook", "bot_secret (must match backend)")
+baseLotSize = input.float(0.10, "Base lot size", step = 0.01)
+
+// ----------------------------- Stoch RSI -------------------------------------
+rsi   = ta.rsi(close, rsiLen)
+stoch = ta.stoch(rsi, rsi, rsi, stochLen)
+k     = ta.sma(stoch, kSmooth)
+d     = ta.sma(k,     dSmooth)
+
+// ----------------------------- Hook detection --------------------------------
+crossUp   = ta.crossover(k, d)
+crossDown = ta.crossunder(k, d)
+
+longSig  = crossUp   and k < oversold   and d < oversold   and strategy.position_size == 0
+shortSig = crossDown and k > overbought and d > overbought and strategy.position_size == 0
+
+// ----------------------------- Stops & targets -------------------------------
+swingLow  = ta.lowest(low,  swingLen)
+swingHigh = ta.highest(high, swingLen)
+
+longStop   = swingLow
+longRisk   = close - longStop
+longTarget = close + longRisk * rMult
+
+shortStop   = swingHigh
+shortRisk   = shortStop - close
+shortTarget = close - shortRisk * rMult
+
+// ----------------------------- Visual aid ------------------------------------
+plotshape(longSig,  title = "Long Hook",  style = shape.triangleup,   location = location.belowbar, color = color.new(color.lime, 0), size = size.small)
+plotshape(shortSig, title = "Short Hook", style = shape.triangledown, location = location.abovebar, color = color.new(color.red,  0), size = size.small)
+
+// ----------------------------- Strategy entries / exits ----------------------
+if longSig and longRisk > 0
+    strategy.entry("Hook Long", strategy.long)
+    strategy.exit("Hook Long Exit", from_entry = "Hook Long",
+         stop  = longStop,
+         limit = longTarget)
+
+if shortSig and shortRisk > 0
+    strategy.entry("Hook Short", strategy.short)
+    strategy.exit("Hook Short Exit", from_entry = "Hook Short",
+         stop  = shortStop,
+         limit = shortTarget)
+
+// ----------------------------- Alert conditions ------------------------------
+alertcondition(longSig,  title = "Stoch Hook Long",  message = "Stoch hook long")
+alertcondition(shortSig, title = "Stoch Hook Short", message = "Stoch hook short")
+
+// ----------------------------- Webhook payload -------------------------------
+// {
+//   "bot_secret": "stoch-hook",
+//   "instrument": "{{ticker}}",
+//   "side": "buy",
+//   "entry_price": {{close}},
+//   "stop_loss": {{strategy.position_avg_price}} - 50,
+//   "take_profit": {{strategy.position_avg_price}} + 75,
+//   "base_lot_size": 0.10
+// }

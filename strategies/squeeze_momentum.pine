@@ -1,0 +1,100 @@
+// © Trade Copilot — educational use only
+// See LEGAL.md in repo root. Not financial advice. Past performance != future results.
+//@version=5
+
+// =============================================================================
+// TTM Squeeze Momentum (LazyBear-style)
+// -----------------------------------------------------------------------------
+// "Squeeze" = Bollinger Bands inside Keltner Channels (low vol).
+// Signal fires the bar the squeeze RELEASES (BB exits KC) provided the
+// momentum oscillator is positive (long) or negative (short).
+// Stops/targets sized in ATR multiples.
+// =============================================================================
+
+strategy("Trade Copilot — Squeeze Momentum",
+     overlay         = false,
+     initial_capital = 10000,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 1,
+     pyramiding      = 0,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.02)
+
+// ----------------------------- Inputs ----------------------------------------
+length     = input.int(20,   "BB / KC length",      minval = 5)
+bbMult     = input.float(2.0, "BB stdev mult",      step = 0.1)
+kcMult     = input.float(1.5, "KC ATR/range mult",  step = 0.1)
+useTR      = input.bool(true, "Use True Range for KC")
+atrLen     = input.int(14,   "ATR length (stop)",   minval = 1)
+stopAtr    = input.float(1.0, "Stop in ATR",        step = 0.1)
+tpAtr      = input.float(2.0, "Target in ATR",      step = 0.1)
+botSecret  = input.string("squeeze-momentum", "bot_secret (must match backend)")
+baseLotSize = input.float(0.10, "Base lot size",    step = 0.01)
+
+// ----------------------------- Bollinger Bands -------------------------------
+basis  = ta.sma(close, length)
+dev    = bbMult * ta.stdev(close, length)
+upperB = basis + dev
+lowerB = basis - dev
+
+// ----------------------------- Keltner Channels ------------------------------
+ma     = ta.sma(close, length)
+range_ = useTR ? ta.tr(true) : (high - low)
+rangeMa = ta.sma(range_, length)
+upperK  = ma + rangeMa * kcMult
+lowerK  = ma - rangeMa * kcMult
+
+// ----------------------------- Squeeze states --------------------------------
+sqzOn  = (lowerB > lowerK) and (upperB < upperK)   // BB inside KC
+sqzOff = (lowerB < lowerK) and (upperB > upperK)   // BB outside KC = release
+
+// ----------------------------- Momentum oscillator ---------------------------
+hh = ta.highest(high, length)
+ll = ta.lowest(low,  length)
+mid = (hh + ll) / 2
+avg = (mid + ta.sma(close, length)) / 2
+mom = ta.linreg(close - avg, length, 0)
+
+// ----------------------------- Visual ----------------------------------------
+momColor = mom > 0 ? (mom > nz(mom[1]) ? color.lime  : color.green) : (mom < nz(mom[1]) ? color.red : color.maroon)
+plot(mom, "Momentum", color = momColor, style = plot.style_columns)
+
+sqzColor = sqzOn ? color.black : (sqzOff ? color.gray : color.blue)
+plot(0, "Squeeze", color = sqzColor, style = plot.style_cross, linewidth = 2)
+
+// ----------------------------- Signal logic ----------------------------------
+// Fire on the bar the squeeze RELEASES (was on previous bar, off this bar).
+release  = sqzOn[1] and not sqzOn
+longSig  = release and mom > 0 and strategy.position_size == 0
+shortSig = release and mom < 0 and strategy.position_size == 0
+
+// ----------------------------- Risk sizing -----------------------------------
+atr = ta.atr(atrLen)
+
+// ----------------------------- Strategy entries / exits ----------------------
+if longSig
+    strategy.entry("SQZ Long", strategy.long)
+    strategy.exit("SQZ Long Exit", from_entry = "SQZ Long",
+         stop  = close - atr * stopAtr,
+         limit = close + atr * tpAtr)
+
+if shortSig
+    strategy.entry("SQZ Short", strategy.short)
+    strategy.exit("SQZ Short Exit", from_entry = "SQZ Short",
+         stop  = close + atr * stopAtr,
+         limit = close - atr * tpAtr)
+
+// ----------------------------- Alert conditions ------------------------------
+alertcondition(longSig,  title = "Squeeze Long",  message = "Squeeze release long")
+alertcondition(shortSig, title = "Squeeze Short", message = "Squeeze release short")
+
+// ----------------------------- Webhook payload -------------------------------
+// {
+//   "bot_secret": "squeeze-momentum",
+//   "instrument": "{{ticker}}",
+//   "side": "buy",
+//   "entry_price": {{close}},
+//   "stop_loss": {{strategy.position_avg_price}} - 50,
+//   "take_profit": {{strategy.position_avg_price}} + 75,
+//   "base_lot_size": 0.10
+// }

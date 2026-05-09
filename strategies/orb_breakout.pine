@@ -1,0 +1,97 @@
+// © Trade Copilot — educational use only
+// See LEGAL.md in repo root. Not financial advice. Past performance != future results.
+//@version=5
+
+// =============================================================================
+// Opening Range Breakout (ORB)
+// -----------------------------------------------------------------------------
+// Captures the first N bars after the regular session opens, then trades
+// breakouts above the high or below the low of that range.
+// Default: 30-minute opening range on a 5-minute chart (6 bars).
+// =============================================================================
+
+strategy("Trade Copilot — ORB Breakout",
+     overlay         = true,
+     initial_capital = 10000,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 1,
+     pyramiding      = 0,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.02)
+
+// ----------------------------- Inputs ----------------------------------------
+orBars        = input.int(6,   "Opening Range Bars",      minval = 1, tooltip = "How many bars after session open define the range. 6 x 5min = 30min.")
+sessionStart  = input.session("0930-1600", "Session (exchange tz)", tooltip = "Regular trading hours window.")
+tpMultiplier  = input.float(1.5, "Take-profit (range multiples)", step = 0.1)
+botSecret     = input.string("orb-breakout", "bot_secret (must match backend)")
+baseLotSize   = input.float(0.10, "Base lot size", step = 0.01)
+
+// ----------------------------- Session detection -----------------------------
+inSession    = not na(time(timeframe.period, sessionStart))
+sessionOpenBar = inSession and not (inSession[1])  // first bar of session
+
+// ----------------------------- Build the range -------------------------------
+var int   barsSinceOpen = na
+var float orHigh = na
+var float orLow  = na
+var bool  orLocked = false
+
+if sessionOpenBar
+    barsSinceOpen := 0
+    orHigh := high
+    orLow  := low
+    orLocked := false
+else if inSession and not na(barsSinceOpen)
+    barsSinceOpen := barsSinceOpen + 1
+    if barsSinceOpen < orBars
+        orHigh := math.max(orHigh, high)
+        orLow  := math.min(orLow,  low)
+    else
+        orLocked := true
+
+// Clear levels outside session
+if not inSession
+    barsSinceOpen := na
+    orLocked := false
+
+// ----------------------------- Plot the range --------------------------------
+plot(orLocked ? orHigh : na, "OR High", color = color.new(color.green, 0), linewidth = 2, style = plot.style_linebr)
+plot(orLocked ? orLow  : na, "OR Low",  color = color.new(color.red,   0), linewidth = 2, style = plot.style_linebr)
+
+// ----------------------------- Signal logic ----------------------------------
+rangeSize  = orHigh - orLow
+longSig    = orLocked and inSession and close > orHigh and strategy.position_size == 0
+shortSig   = orLocked and inSession and close < orLow  and strategy.position_size == 0
+
+// ----------------------------- Strategy entries / exits ----------------------
+if longSig
+    strategy.entry("ORB Long", strategy.long)
+    strategy.exit("ORB Long Exit", from_entry = "ORB Long",
+         stop  = orLow,
+         limit = close + rangeSize * tpMultiplier)
+
+if shortSig
+    strategy.entry("ORB Short", strategy.short)
+    strategy.exit("ORB Short Exit", from_entry = "ORB Short",
+         stop  = orHigh,
+         limit = close - rangeSize * tpMultiplier)
+
+// ----------------------------- Alert conditions ------------------------------
+// These also fire even when used as an indicator-style alert.
+alertcondition(longSig,  title = "ORB Long Signal",  message = "ORB long breakout")
+alertcondition(shortSig, title = "ORB Short Signal", message = "ORB short breakout")
+
+// ----------------------------- Webhook payload -------------------------------
+// Paste this exact block (minus the // prefix) into the TradingView alert
+// "Message" box when creating the webhook alert. {{...}} placeholders are
+// replaced by TradingView at fire time.
+//
+// {
+//   "bot_secret": "orb-breakout",
+//   "instrument": "{{ticker}}",
+//   "side": "buy",
+//   "entry_price": {{close}},
+//   "stop_loss": {{strategy.position_avg_price}} - 50,
+//   "take_profit": {{strategy.position_avg_price}} + 75,
+//   "base_lot_size": 0.10
+// }

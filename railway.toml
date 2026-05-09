@@ -1,0 +1,32 @@
+# ----------------------------------------------------------------------
+# Railway deploy config — Trade Copilot backend
+#   railway up   (run from repo root with this file)
+# ----------------------------------------------------------------------
+
+[build]
+builder = "NIXPACKS"
+# Tell nixpacks the project root is backend/.
+buildCommand = "cd backend && pip install --upgrade pip && pip install -r requirements.txt"
+
+[deploy]
+startCommand = "cd backend && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# ---- Required env vars (set via `railway variables` or dashboard) ----
+# SECRET_KEY              -> python -c "import secrets; print(secrets.token_urlsafe(48))"
+# ENCRYPTION_KEY          -> python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# DATABASE_URL            -> sqlite:////app/data/trade_copilot.db   (mount a volume at /app/data)
+#                            OR a postgres URL once migrated.
+# ALLOWED_ORIGINS         -> https://your-frontend.vercel.app
+# TRADELOCKER_API_BASE    -> https://live.tradelocker.com/backend-api
+# TRADELOCKER_DEMO_API_BASE -> https://demo.tradelocker.com/backend-api
+# DISCORD_WEBHOOK_URL     -> (optional)
+# BUY_ME_COFFEE_USERNAME  -> dbutler
+# ---------------------------------------------------------------------
+
+# A persistent volume is required for SQLite. Configure in Railway dashboard:
+#   Service → Volumes → Add → mount path: /app/data
+# If you migrate to Postgres, drop the volume and set DATABASE_URL accordingly.

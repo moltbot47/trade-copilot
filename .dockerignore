@@ -1,0 +1,53 @@
+# Source control
+.git/
+.gitignore
+.github/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/venv/
+**/.venv/
+**/env/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Node
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/dist/
+**/*.tsbuildinfo
+**/npm-debug.log*
+
+# Env & secrets
+**/.env
+**/.env.local
+**/.env*.local
+**/.env.tuning
+
+# Local DB & captures
+backend/trade_copilot.db
+backend/*.db
+backend/*.sqlite3
+backend/tuning_capture.json
+backend/tradelocker_*.json
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Docs that don't need to be in image
+docs/
+DEPLOY.md
+LEGAL.md
+README.md
+Makefile
+docker-compose.yml
+Dockerfile.*

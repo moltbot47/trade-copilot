@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------
+  # Lint — backend (ruff) + frontend (eslint, soft-fail)
+  # -------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install ruff
+        run: pip install "ruff>=0.4.0"
+
+      - name: Ruff check (backend)
+        run: ruff check backend/ --output-format=github
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Frontend lint (next lint, soft-fail until config lands)
+        working-directory: frontend
+        run: npx next lint || echo "::warning::eslint config not yet configured — skipping"
+
+  # -------------------------------------------------
+  # Test — backend pytest + frontend vitest (if present)
+  # -------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run pytest
+        working-directory: backend
+        env:
+          SECRET_KEY: ci_secret_do_not_use_in_prod_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          ENCRYPTION_KEY: ci_dummy_fernet_key_replace_in_real_envxxxxx=
+          DATABASE_URL: "sqlite:///./test_ci.db"
+        run: |
+          if [ -d tests ] || compgen -G "test_*.py" > /dev/null || compgen -G "**/test_*.py" > /dev/null; then
+            pytest -q
+          else
+            echo "::warning::no backend tests found — skipping"
+          fi
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Frontend tests (vitest if configured)
+        working-directory: frontend
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test ? 0 : 1)"; then
+            npm test -- --run || npm test
+          else
+            echo "::warning::no frontend test script — skipping"
+          fi
+
+  # -------------------------------------------------
+  # Docker build matrix — verify both images build clean
+  # -------------------------------------------------
+  docker-build:
+    name: Docker build (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            dockerfile: Dockerfile.backend
+            tag: trade-copilot-backend:ci
+          - image: frontend
+            dockerfile: Dockerfile.frontend
+            tag: trade-copilot-frontend:ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.image }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: ${{ matrix.tag }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max

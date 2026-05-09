@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1.6
+# ----------------------------------------------------------------------
+# Trade Copilot — Frontend (Next.js 14)
+# Multi-stage: deps -> builder (next build, standalone) -> tiny runtime.
+# ----------------------------------------------------------------------
+
+# ---------- deps ----------
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+# libc6-compat: required by some Next.js native deps on alpine
+RUN apk add --no-cache libc6-compat
+
+COPY frontend/package.json frontend/package-lock.json* ./
+
+RUN npm ci --no-audit --no-fund
+
+# ---------- builder ----------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ ./
+
+# Use Next.js standalone output for the smallest possible runtime image.
+# (next.config.js may need `output: 'standalone'` — handled by the runtime fallback below.)
+RUN npm run build
+
+# ---------- runtime ----------
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3001 \
+    HOSTNAME=0.0.0.0
+
+# Non-root user
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser  --system --uid 1001 --ingroup nodejs nextjs \
+ && apk add --no-cache curl tini
+
+# Copy build output + runtime deps. (frontend has no public/ today; if added,
+# include it in the builder stage and uncomment the COPY line below.)
+# COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next         ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules  ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/package.json  ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
+
+USER nextjs
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS "http://localhost:${PORT:-3001}/" || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--"]
+# `next start` honours $PORT and $HOSTNAME.
+CMD ["sh", "-c", "node node_modules/next/dist/bin/next start -p ${PORT:-3001} -H ${HOSTNAME:-0.0.0.0}"]

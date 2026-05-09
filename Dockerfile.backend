@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1.6
+# ----------------------------------------------------------------------
+# Trade Copilot — Backend (FastAPI / uvicorn)
+# Multi-stage build: deps layer + slim runtime with non-root user.
+# ----------------------------------------------------------------------
+
+# ---------- builder ----------
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+# Build deps for any wheels that need compilation (cryptography, bcrypt, etc.)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        libffi-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt ./requirements.txt
+
+# Install into a relocatable prefix we can copy into the runtime image.
+RUN pip install --prefix=/install --no-warn-script-location -r requirements.txt
+
+# ---------- runtime ----------
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8000 \
+    PATH="/usr/local/bin:${PATH}"
+
+# curl for HEALTHCHECK; tini for clean signal handling
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 1001 app \
+ && useradd  --system --uid 1001 --gid app --home /app --shell /usr/sbin/nologin app
+
+WORKDIR /app
+
+# Copy installed Python deps from builder
+COPY --from=builder /install /usr/local
+
+# Copy application source
+COPY --chown=app:app backend/app          ./app
+COPY --chown=app:app backend/seed_bots.py        ./seed_bots.py
+COPY --chown=app:app backend/seed_latpfn_bot.py  ./seed_latpfn_bot.py
+COPY --chown=app:app backend/scripts             ./scripts
+
+# Persistent SQLite mount point
+RUN mkdir -p /app/data && chown -R app:app /app
+
+USER app
+
+EXPOSE 8000
+
+# Health probe — relies on /health endpoint in app/main.py
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS "http://localhost:${PORT:-8000}/health" || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

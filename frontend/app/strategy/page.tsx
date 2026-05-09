@@ -1,0 +1,362 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, getUserEmail } from "@/lib/api";
+import EmailGate from "@/components/EmailGate";
+import StrategyStatusBadge from "@/components/StrategyStatusBadge";
+import StrategyControlButton from "@/components/StrategyControlButton";
+import EquityCurve from "@/components/EquityCurve";
+import StatsCard from "@/components/StatsCard";
+import TradeLogTable from "@/components/TradeLogTable";
+import FeedbackLogTable from "@/components/FeedbackLogTable";
+import OpenPositionsTable from "@/components/OpenPositionsTable";
+import type {
+  StrategyState,
+  StrategyTimeframe,
+  PerformanceSnapshot,
+  TradeOutcome,
+  EquityPoint,
+} from "@/lib/types";
+
+const DEFAULT_BOT_ID = 4; // LaT-PFN Momentum (seeded by seed_latpfn_bot.py)
+const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD", "NAS100", "EURUSD"];
+const POLL_MS_OK = 5_000;
+const POLL_MS_OFFLINE = 10_000;
+
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return `${Math.max(0, Math.round(diff / 1000))}s ago`;
+  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
+function trendOf(curr: number, prev: number | null): "up" | "down" | "flat" {
+  if (prev === null) return "flat";
+  if (curr > prev + 1e-9) return "up";
+  if (curr < prev - 1e-9) return "down";
+  return "flat";
+}
+
+function profitFactorColor(pf: number): string {
+  if (pf >= 1.5) return "var(--accent)";
+  if (pf >= 1.0) return "var(--warn)";
+  return "var(--danger)";
+}
+
+export default function StrategyPage() {
+  const [timeframe, setTimeframe] = useState<StrategyTimeframe>("5m");
+  const [state, setState] = useState<StrategyState | null>(null);
+  const [perf, setPerf] = useState<PerformanceSnapshot | null>(null);
+  const [recentTrades, setRecentTrades] = useState<TradeOutcome[]>([]);
+  const [snapshots, setSnapshots] = useState<PerformanceSnapshot[]>([]);
+  const [equity, setEquity] = useState<EquityPoint[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tickNow, setTickNow] = useState<number>(Date.now());
+
+  const prevPerfRef = useRef<PerformanceSnapshot | null>(null);
+
+  const botId = DEFAULT_BOT_ID;
+
+  const refresh = async () => {
+    try {
+      const [statusRes, equityRes] = await Promise.allSettled([
+        api.getStrategyStatus(botId, timeframe),
+        api.getStrategyEquity(botId),
+      ]);
+
+      let backendOffline = false;
+
+      if (statusRes.status === "fulfilled") {
+        const r = statusRes.value;
+        prevPerfRef.current = perf;
+        setState(r.state);
+        setPerf(r.performance);
+        setRecentTrades(r.recent_trades || []);
+        setSnapshots(r.recent_snapshots || (r.performance ? [r.performance] : []));
+        setError(null);
+      } else {
+        const msg = (statusRes.reason as Error)?.message || "error";
+        if (msg === "Backend offline") backendOffline = true;
+        else setError(msg);
+      }
+
+      if (equityRes.status === "fulfilled") {
+        setEquity(equityRes.value.points || []);
+      } else {
+        const msg = (equityRes.reason as Error)?.message || "error";
+        if (msg === "Backend offline") backendOffline = true;
+      }
+
+      setOffline(backendOffline);
+      setLastUpdated(new Date());
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Initial load + polling
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeframe]);
+
+  useEffect(() => {
+    const interval = offline ? POLL_MS_OFFLINE : POLL_MS_OK;
+    const t = setInterval(refresh, interval);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offline, timeframe]);
+
+  // Tick "Last updated Xs ago" every second
+  useEffect(() => {
+    const t = setInterval(() => setTickNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const lastUpdatedLabel = useMemo(() => {
+    if (!lastUpdated) return "—";
+    const diff = Math.max(0, Math.round((tickNow - lastUpdated.getTime()) / 1000));
+    return `${diff}s ago`;
+  }, [lastUpdated, tickNow]);
+
+  const handleStart = async () => {
+    const email = getUserEmail();
+    const userEmails = email ? [email] : [];
+    try {
+      const next = await api.startStrategy(
+        botId,
+        timeframe,
+        DEFAULT_SYMBOLS,
+        userEmails
+      );
+      setState(next);
+      setError(null);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleStop = async () => {
+    try {
+      const next = await api.stopStrategy(botId, timeframe);
+      setState(next);
+      setError(null);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Stats
+  const winRate = perf ? perf.win_rate : 0;
+  const profitFactor = perf ? perf.profit_factor : 0;
+  const sharpe = perf ? perf.sharpe : 0;
+  const maxDD = perf ? perf.max_drawdown_pct : 0;
+
+  const winRateTrend = perf
+    ? trendOf(perf.win_rate, prevPerfRef.current?.win_rate ?? null)
+    : null;
+
+  const lastFeedback = snapshots.find((s) => !!s.feedback_action) || null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <EmailGate />
+
+      {/* Header */}
+      <header
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "1rem",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>
+          <div className="dim" style={{ fontSize: "0.85rem" }}>
+            {">"} live strategy console
+          </div>
+          <h1 style={{ margin: "0.25rem 0" }}>
+            <span className="accent">LaT-PFN Momentum</span>
+          </h1>
+          <p className="dim" style={{ margin: 0, fontSize: "0.85rem" }}>
+            zero-shot forecasting · self-tuning threshold · auto-refresh{" "}
+            {offline ? "10s (offline)" : "5s"}
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          {/* Timeframe selector */}
+          <div
+            style={{
+              display: "inline-flex",
+              border: "1px solid var(--border)",
+            }}
+          >
+            {(["1m", "5m"] as StrategyTimeframe[]).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                style={{
+                  padding: "0.4rem 0.85rem",
+                  background:
+                    timeframe === tf ? "var(--accent)" : "transparent",
+                  color: timeframe === tf ? "var(--bg)" : "var(--text-dim)",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+
+          <StrategyStatusBadge state={state} />
+
+          <StrategyControlButton
+            isRunning={!!state?.is_running}
+            onStart={handleStart}
+            onStop={handleStop}
+            disabled={offline}
+          />
+        </div>
+      </header>
+
+      {/* Backend offline banner */}
+      {offline && (
+        <div className="card" style={{ borderColor: "var(--danger)" }}>
+          <strong className="danger">backend offline.</strong>{" "}
+          <span className="dim">
+            Cannot reach{" "}
+            {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"} — retrying every 10s.
+          </span>
+        </div>
+      )}
+
+      {error && !offline && (
+        <div className="card" style={{ borderColor: "var(--warn)" }}>
+          <span className="warn">error:</span>{" "}
+          <span className="dim">{error}</span>
+        </div>
+      )}
+
+      {/* Threshold + last updated bar */}
+      <section
+        className="card"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "1.5rem",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0.7rem 1rem",
+        }}
+      >
+        <div style={{ fontSize: "0.85rem" }}>
+          <span className="dim">confidence threshold: </span>
+          <span className="accent" style={{ fontWeight: 700 }}>
+            {state?.confidence_threshold?.toFixed(2) ?? "—"}σ
+          </span>
+          {lastFeedback && (
+            <span className="dim" style={{ marginLeft: "0.5rem" }}>
+              · auto-adjusted {formatRelative(lastFeedback.snapshot_at)}
+            </span>
+          )}
+        </div>
+        <div className="dim" style={{ fontSize: "0.78rem" }}>
+          last updated: {lastUpdatedLabel}
+          {state?.last_signal_at && (
+            <>
+              {"  ·  "}last signal: {formatRelative(state.last_signal_at)}
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Equity curve */}
+      <section className="card">
+        <h2 style={{ marginTop: 0 }} className="accent">
+          {">"} equity curve (cumulative R)
+        </h2>
+        <EquityCurve points={equity} />
+      </section>
+
+      {/* Stats grid */}
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "1rem",
+        }}
+      >
+        <StatsCard
+          label="win rate"
+          value={`${(winRate * 100).toFixed(1)}%`}
+          trend={winRateTrend}
+          subtitle={`rolling-${perf?.window_size ?? 20}`}
+        />
+        <StatsCard
+          label="profit factor"
+          value={profitFactor === Infinity ? "∞" : profitFactor.toFixed(2)}
+          color={profitFactorColor(profitFactor)}
+        />
+        <StatsCard label="sharpe" value={sharpe.toFixed(2)} />
+        <StatsCard
+          label="max drawdown"
+          value={`${(maxDD * 100).toFixed(1)}%`}
+          color="var(--danger)"
+        />
+      </section>
+
+      {/* Open positions */}
+      <section className="card">
+        <h2 style={{ marginTop: 0 }} className="accent">
+          {">"} open positions
+        </h2>
+        <OpenPositionsTable trades={recentTrades} />
+      </section>
+
+      {/* Trade log */}
+      <section className="card">
+        <h2 style={{ marginTop: 0 }} className="accent">
+          {">"} trade log (last 20)
+        </h2>
+        <TradeLogTable trades={recentTrades} limit={20} />
+      </section>
+
+      {/* Feedback loop */}
+      <section className="card">
+        <h2 style={{ marginTop: 0 }} className="accent">
+          {">"} self-adjusting feedback loop
+        </h2>
+        <p className="dim" style={{ marginTop: 0, fontSize: "0.82rem" }}>
+          last 5 performance snapshots + threshold adjustments
+        </p>
+        <FeedbackLogTable snapshots={snapshots} limit={5} />
+      </section>
+    </div>
+  );
+}

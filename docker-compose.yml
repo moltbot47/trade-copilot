@@ -1,0 +1,59 @@
+# ---------------------------------------------------------------
+# Trade Copilot — local dev stack
+#   make dev   →  docker-compose up --build
+# ---------------------------------------------------------------
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: trade-copilot-backend:dev
+    container_name: tc-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      PORT: "8000"
+      DATABASE_URL: "sqlite:////app/data/trade_copilot.db"
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist sqlite + any other backend-owned state.
+      - backend_data:/app/data
+    networks:
+      - tc_net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: trade-copilot-frontend:dev
+    container_name: tc-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # Browser-side var; bake at build for production deploys.
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    ports:
+      - "3001:3001"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - tc_net
+
+networks:
+  tc_net:
+    driver: bridge
+
+volumes:
+  backend_data:
+    driver: local

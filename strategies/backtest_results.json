@@ -1,0 +1,45 @@
+{
+  "_meta": {
+    "disclaimer": "Placeholder backtest stats. Replace with real numbers from your TradingView Strategy Tester before publishing or trusting in production. Past performance does not predict future results.",
+    "generated_at": "2026-05-08",
+    "engine": "TradingView Strategy Tester (placeholder)",
+    "commission_pct": 0.02,
+    "slippage_ticks": 1
+  },
+  "orb_breakout": {
+    "win_rate": 0.58,
+    "profit_factor": 1.32,
+    "max_drawdown_pct": 9.4,
+    "sharpe": 1.05,
+    "total_trades": 412,
+    "avg_R": 0.42,
+    "instruments_tested": ["EURUSD", "GBPUSD", "XAUUSD", "NAS100"],
+    "timeframe": "5m",
+    "period": "2024-01-01 to 2026-01-01",
+    "best_session": "London open + NY open"
+  },
+  "squeeze_momentum": {
+    "win_rate": 0.55,
+    "profit_factor": 1.41,
+    "max_drawdown_pct": 11.2,
+    "sharpe": 0.96,
+    "total_trades": 287,
+    "avg_R": 0.61,
+    "instruments_tested": ["BTCUSD", "ETHUSD", "XAUUSD", "SPX"],
+    "timeframe": "15m",
+    "period": "2024-01-01 to 2026-01-01",
+    "best_session": "Trending regime; underperforms in chop"
+  },
+  "stoch_hook": {
+    "win_rate": 0.63,
+    "profit_factor": 1.27,
+    "max_drawdown_pct": 7.8,
+    "sharpe": 1.12,
+    "total_trades": 521,
+    "avg_R": 0.31,
+    "instruments_tested": ["EURUSD", "USDJPY", "AUDUSD"],
+    "timeframe": "15m",
+    "period": "2024-01-01 to 2026-01-01",
+    "best_session": "Range-bound Asian + early London"
+  }
+}
