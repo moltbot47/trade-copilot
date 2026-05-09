@@ -1,0 +1,50 @@
+# Koyeb service definition for the Trade Copilot API.
+# This is a reference manifest — the user creates the service via the
+# Koyeb dashboard following DEPLOY-KOYEB.md. Mirror these settings in
+# the UI (or use `koyeb deploy -f koyeb.yaml` once the CLI is set up).
+
+name: trade-copilot-api
+services:
+  - name: api
+    type: web
+    git:
+      branch: main
+      build_command: ""  # empty - using Dockerfile
+    build:
+      type: docker
+      docker:
+        dockerfile: Dockerfile.backend
+    ports:
+      - port: 8000
+        protocol: http
+    routes:
+      - path: /
+        port: 8000
+    env:
+      - key: PORT
+        value: "8000"
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: "https://trading.jetlag-recovery.com"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: TRADELOCKER_API_BASE
+        value: "https://live.tradelocker.com/backend-api"
+      - key: TRADELOCKER_DEMO_API_BASE
+        value: "https://demo.tradelocker.com/backend-api"
+      - key: BUY_ME_COFFEE_USERNAME
+        value: dbutler
+      # SECRETS (set in Koyeb UI as type=secret):
+      #   DATABASE_URL = postgresql+psycopg2://...neon.tech.../trade_copilot?sslmode=require
+      #   SECRET_KEY (from .deploy-secrets)
+      #   ENCRYPTION_KEY (from .deploy-secrets)
+    health_checks:
+      - http:
+          path: /health
+        grace_period: 30
+    instance_types:
+      - type: free   # 0.1 vCPU, 512 MB RAM
+    scaling:
+      min: 1
+      max: 1

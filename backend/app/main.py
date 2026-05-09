@@ -104,14 +104,17 @@ def _seed_advanced_bots() -> None:
 def _apply_lightweight_migrations() -> None:
     """Add columns to existing tables that SQLAlchemy's create_all skips.
 
-    SQLite's create_all only creates NEW tables — it won't ALTER an existing
-    one to add a column we added in code. This keeps prod schemas in step
-    without dragging in Alembic for trivial column adds.
+    create_all only creates NEW tables — it won't ALTER an existing one
+    to add a column we added in code. This keeps prod schemas in step
+    without dragging in Alembic for trivial column adds. The pattern is
+    inspect-first (works on both SQLite and Postgres) and the column
+    definitions use ANSI-compatible types (FLOAT, default literal).
     """
     from sqlalchemy import inspect, text
 
     pending = [
-        # (table_name, column_name, sqlite_column_def)
+        # (table_name, column_name, ansi_compatible_column_def)
+        # FLOAT + DEFAULT <literal> are accepted by both SQLite and Postgres.
         ("cohorts", "max_favorable_r_seen", "FLOAT DEFAULT 0.0"),
     ]
     insp = inspect(engine)
