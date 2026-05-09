@@ -972,6 +972,27 @@ class QuantRunner:
 
     # ---------- helpers ----------
 
+    def _read_threshold(self, default: float = 0.5) -> float:
+        """Read confidence_threshold from StrategyState; never raise."""
+        try:
+            db = self.db_session_factory()
+            try:
+                state = (
+                    db.query(StrategyState)
+                    .filter(
+                        StrategyState.bot_id == self.bot_id,
+                        StrategyState.timeframe == self.timeframe,
+                    )
+                    .first()
+                )
+                if state and state.confidence_threshold:
+                    return float(state.confidence_threshold)
+            finally:
+                db.close()
+        except Exception as exc:
+            logger.warning("read threshold failed (using default %s): %s", default, exc)
+        return default
+
     async def _init_state(self) -> None:
         db = self.db_session_factory()
         try:
