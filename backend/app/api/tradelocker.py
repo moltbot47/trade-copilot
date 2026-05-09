@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,7 @@ def _connect_key(request: Request) -> str:
 @limiter.limit("5/minute", key_func=_connect_key)
 async def connect(
     request: Request,
+    response: Response,  # required by slowapi to inject X-RateLimit-* headers
     payload: TradeLockerConnect,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
