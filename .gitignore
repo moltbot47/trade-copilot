@@ -55,3 +55,4 @@ backend/*.sqlite3
 # Logs
 *.log
 logs/
+.deploy-secrets

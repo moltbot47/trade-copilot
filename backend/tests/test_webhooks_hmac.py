@@ -20,7 +20,6 @@ import logging
 import time
 from unittest.mock import AsyncMock, patch
 
-import pytest
 
 from app.core import webhook_signing
 from app.core.webhook_signing import sign_payload

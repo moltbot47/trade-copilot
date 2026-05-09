@@ -173,7 +173,7 @@ async def main() -> int:
     # Try positions
     pos_paths = [
         f"/trade/accounts/{real_id}/positions",
-        f"/trade/positions",
+        "/trade/positions",
     ]
     for p in pos_paths:
         result = await try_get(working_base, p, access, f"positions {p}", acc_num=real_acc_num)
@@ -210,7 +210,7 @@ async def main() -> int:
     print(f"   Calls made: {len(capture['calls'])}")
     print(f"   Working base: {capture.get('working_base')}")
     print(f"   Auth token field: {capture.get('auth_token_field')}")
-    print(f"   Endpoints discovered:")
+    print("   Endpoints discovered:")
     for k in ("accounts_endpoint", "state_endpoint", "positions_endpoint", "instruments_endpoint"):
         print(f"     {k}: {capture.get(k, '❌ not found')}")
     return 0

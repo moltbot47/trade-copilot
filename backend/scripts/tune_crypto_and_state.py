@@ -24,7 +24,7 @@ async def main() -> int:
             json={"email": EMAIL, "password": PASSWORD, "server": SERVER},
         )
         token = r.json()["accessToken"]
-        print(f"✅ auth ok\n")
+        print("✅ auth ok\n")
 
         accts = await c.get(
             f"{BASE}/auth/jwt/all-accounts",
@@ -39,7 +39,7 @@ async def main() -> int:
 
         # Account state COLUMN metadata - this tells us what each index means
         for path in (
-            f"/trade/config",
+            "/trade/config",
             f"/trade/accounts/{acc_id}/columnConfig",
             f"/trade/accounts/{acc_id}/columns",
         ):
@@ -50,9 +50,9 @@ async def main() -> int:
                     data = r.json()
                     txt = json.dumps(data)
                     if "accountDetails" in txt or "balance" in txt.lower():
-                        print(f"   → has accountDetails columns!")
+                        print("   → has accountDetails columns!")
                         Path(ROOT / "tradelocker_config.json").write_text(json.dumps(data, indent=2))
-                        print(f"   wrote → tradelocker_config.json")
+                        print("   wrote → tradelocker_config.json")
                         # extract account columns
                         cols = None
                         for k in ("accountDetailsConfig", "accountColumns", "columns"):
@@ -70,7 +70,7 @@ async def main() -> int:
                                 )
                                 print(f"     [{i:2}] {title}")
                     break
-            except Exception as e:
+            except Exception:
                 pass
 
         # Crypto search
@@ -104,7 +104,7 @@ async def main() -> int:
         Path(ROOT / "tradelocker_crypto_and_state.json").write_text(
             json.dumps(out, indent=2)
         )
-        print(f"\n✅ saved → tradelocker_crypto_and_state.json")
+        print("\n✅ saved → tradelocker_crypto_and_state.json")
     return 0
 
 

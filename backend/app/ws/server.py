@@ -13,7 +13,6 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session

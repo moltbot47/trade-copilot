@@ -51,7 +51,7 @@ async def main() -> int:
         print(f"✅ auth ok, account id={acc_id} accNum={acc_num} balance=${first['accountBalance']}\n")
 
         # ----------- ATTEMPT 1: Standard order body -----------
-        print(f"--- placing 0.001 BTC market buy (attempt 1) ---")
+        print("--- placing 0.001 BTC market buy (attempt 1) ---")
         body = {
             "tradableInstrumentId": BTC_TRADABLE_ID,
             "routeId": BTC_ROUTE_ID_TRADE,
@@ -76,13 +76,12 @@ async def main() -> int:
 
         if r.status_code in (200, 201):
             print("\n✅ order accepted")
-            order_data = resp_json.get("d", resp_json)
 
             # Get state after order
             await asyncio.sleep(2)
             state = await c.get(f"{BASE}/trade/accounts/{acc_id}/state", headers=h)
             captures["post_order_state"] = state.json()
-            print(f"\n--- state after order ---")
+            print("\n--- state after order ---")
             details = state.json()["d"].get("accountDetailsData", [])
             print(f"  balance:          ${details[0]}")
             print(f"  availableFunds:   ${details[2]}")
@@ -101,7 +100,7 @@ async def main() -> int:
 
             if positions:
                 # Close the first position by placing opposite-side market order
-                print(f"\n--- closing position ---")
+                print("\n--- closing position ---")
                 first_pos = positions[0]
                 # positions are arrays per columns: [id, tradableInstrumentId, routeId, side, qty, avgPrice, sl, tp, openDate, unrealizedPl, strategyId]
                 pos_id = first_pos[0] if isinstance(first_pos, list) else first_pos.get("id")
@@ -148,7 +147,7 @@ async def main() -> int:
             print("\n❌ order rejected — capturing details for debugging")
 
         Path(ROOT / "tradelocker_order_test.json").write_text(json.dumps(captures, indent=2))
-        print(f"\n✅ saved → tradelocker_order_test.json")
+        print("\n✅ saved → tradelocker_order_test.json")
 
     return 0
 

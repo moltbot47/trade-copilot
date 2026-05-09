@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
-import pandas as pd
 import pytest
 
-from app.strategies.runner import StrategyRunner, _RUNNERS, get_runner, tf_seconds
+from app.strategies.runner import StrategyRunner, get_runner, tf_seconds
 
 
 def _session_factory(db_session):
