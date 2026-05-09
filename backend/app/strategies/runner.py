@@ -733,17 +733,90 @@ class QuantRunner:
             except asyncio.TimeoutError:
                 pass
 
+    def _log_tick(
+        self,
+        symbol: str,
+        decision: str,
+        current_price: float | None = None,
+        forecast_view: dict | None = None,
+        threshold: float | None = None,
+        reason: str | None = None,
+        user_id: int | None = None,
+        extra: dict | None = None,
+    ) -> None:
+        """Persist a per-tick decision to StrategyTickLog + publish WS event.
+
+        Best-effort: failure here must never break the trading loop.
+        """
+        try:
+            from app.db.models import StrategyTickLog
+            import json as _json
+
+            db = self.db_session_factory()
+            try:
+                row = StrategyTickLog(
+                    bot_id=self.bot_id,
+                    user_id=user_id,
+                    timeframe=self.timeframe,
+                    symbol=symbol,
+                    current_price=current_price,
+                    forecast_drift=(forecast_view or {}).get("drift"),
+                    forecast_std=(forecast_view or {}).get("std"),
+                    forecast_confidence=(forecast_view or {}).get("confidence"),
+                    threshold=threshold,
+                    decision=decision,
+                    reason=reason,
+                    extra=_json.dumps(extra or {}),
+                )
+                db.add(row)
+                db.commit()
+                db.refresh(row)
+            finally:
+                db.close()
+
+            # Publish to subscribed WS clients
+            try:
+                import asyncio as _asyncio
+                from app.ws.event_bus import event_bus
+
+                payload = {
+                    "id": row.id,
+                    "tick_at": row.tick_at.isoformat(),
+                    "bot_id": row.bot_id,
+                    "timeframe": row.timeframe,
+                    "symbol": symbol,
+                    "current_price": current_price,
+                    "forecast_drift": (forecast_view or {}).get("drift"),
+                    "forecast_std": (forecast_view or {}).get("std"),
+                    "forecast_confidence": (forecast_view or {}).get("confidence"),
+                    "threshold": threshold,
+                    "decision": decision,
+                    "reason": reason,
+                }
+                if user_id is not None:
+                    result = event_bus.publish("analysis", user_id, payload)
+                else:
+                    result = event_bus.publish_global("analysis", payload)
+                if _asyncio.iscoroutine(result):
+                    _asyncio.ensure_future(result)
+            except Exception:
+                pass
+        except Exception as exc:
+            logger.debug("tick log failed: %s", exc)
+
     async def _tick(
         self,
         strategy: LatPFNQuantStrategy,
         bar_fetcher: BarFetcher,
         client: TradeLockerClient,
     ) -> None:
+        threshold = self._read_threshold(default=0.5)
         for symbol in self.symbols:
             try:
                 bars = await bar_fetcher.fetch_bars(symbol, self.timeframe, count=240)
             except Exception as exc:
                 logger.warning("bars fetch failed %s: %s", symbol, exc)
+                self._log_tick(symbol, "error", reason=f"bars fetch failed: {exc}", threshold=threshold)
                 continue
             current_price = float(bars["close"].iloc[-1]) if len(bars) else None
             forecast_view = await strategy.forecast_view(bars) if current_price else None
@@ -810,6 +883,14 @@ class QuantRunner:
                                 "skip new entry for %s — broker still has open exposure",
                                 symbol,
                             )
+                            self._log_tick(
+                                symbol, "skip_existing_position",
+                                current_price=current_price,
+                                forecast_view=forecast_view,
+                                threshold=threshold,
+                                reason="broker still has open exposure",
+                                user_id=user.id,
+                            )
                             continue
 
                         sig = await strategy.on_bar(symbol, bars)
@@ -817,9 +898,52 @@ class QuantRunner:
                             try:
                                 await self._open_new_cohort(tm, sig, user, token, client)
                                 tm_db.commit()
+                                self._log_tick(
+                                    symbol,
+                                    f"entry_{sig.side}",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason=f"signal fired qty={sig.qty}",
+                                    user_id=user.id,
+                                    extra={"qty": sig.qty, "sl": sig.stop_loss, "tp": sig.take_profit},
+                                )
                             except Exception as exc:
                                 tm_db.rollback()
                                 logger.warning("open cohort failed: %s", exc)
+                                self._log_tick(
+                                    symbol, "error",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason=f"open cohort failed: {exc}",
+                                    user_id=user.id,
+                                )
+                        else:
+                            # Forecast computed but didn't pass threshold — log it.
+                            conf = (forecast_view or {}).get("confidence")
+                            self._log_tick(
+                                symbol, "skip_below_threshold",
+                                current_price=current_price,
+                                forecast_view=forecast_view,
+                                threshold=threshold,
+                                reason=(
+                                    f"confidence {conf:.3f} < threshold {threshold:.2f}"
+                                    if conf is not None
+                                    else "no forecast available"
+                                ),
+                                user_id=user.id,
+                            )
+                    else:
+                        # Existing cohort being managed — log a brief manage tick.
+                        self._log_tick(
+                            symbol, "manage",
+                            current_price=current_price,
+                            forecast_view=forecast_view,
+                            threshold=threshold,
+                            reason=f"managing {len(open_cohorts)} open cohort(s)",
+                            user_id=user.id,
+                        )
                 finally:
                     tm_db.close()
 

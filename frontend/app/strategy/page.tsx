@@ -12,6 +12,7 @@ import TradeLogTable from "@/components/TradeLogTable";
 import FeedbackLogTable from "@/components/FeedbackLogTable";
 import OpenPositionsTable from "@/components/OpenPositionsTable";
 import ActivityLog from "@/components/ActivityLog";
+import AnalysisLog from "@/components/AnalysisLog";
 import type {
   StrategyState,
   StrategyTimeframe,
@@ -488,6 +489,8 @@ export default function StrategyPage() {
       </section>
 
       {/* Activity log — live event stream from WS (Wave 5C) */}
+      <AnalysisLog botId={botId} timeframe={timeframe} />
+
       <ActivityLog timeframe={timeframe} />
     </div>
   );

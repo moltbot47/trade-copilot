@@ -255,3 +255,57 @@ def equity(bot_id: int, db: Session = Depends(get_db)) -> dict:
         "cumulative_pnl_usd": pnl_curve,
         "total_trades": len(rows),
     }
+
+
+@router.get("/analysis")
+def analysis(
+    bot_id: int,
+    timeframe: str = "1m",
+    limit: int = 200,
+    before_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Per-tick decision log — pre-decision visibility into the runner.
+
+    Returns most-recent rows first. Use `before_id` to paginate backward
+    (load older entries when user scrolls). Hard cap: 500 per request.
+    """
+    from app.db.models import StrategyTickLog
+    import json as _json
+
+    limit = min(max(int(limit), 1), 500)
+    q = (
+        db.query(StrategyTickLog)
+        .filter(
+            StrategyTickLog.bot_id == bot_id,
+            StrategyTickLog.timeframe == timeframe,
+        )
+    )
+    if before_id is not None:
+        q = q.filter(StrategyTickLog.id < int(before_id))
+    rows = q.order_by(StrategyTickLog.id.desc()).limit(limit).all()
+    items = []
+    for r in rows:
+        try:
+            extra = _json.loads(r.extra or "{}")
+        except Exception:
+            extra = {}
+        items.append({
+            "id": r.id,
+            "tick_at": r.tick_at.isoformat(),
+            "symbol": r.symbol,
+            "current_price": r.current_price,
+            "forecast_drift": r.forecast_drift,
+            "forecast_std": r.forecast_std,
+            "forecast_confidence": r.forecast_confidence,
+            "threshold": r.threshold,
+            "decision": r.decision,
+            "reason": r.reason,
+            "extra": extra,
+        })
+    return {
+        "bot_id": bot_id,
+        "timeframe": timeframe,
+        "items": items,
+        "next_before_id": items[-1]["id"] if items else None,
+    }

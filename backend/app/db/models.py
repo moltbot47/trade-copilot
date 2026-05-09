@@ -292,3 +292,42 @@ class CohortLeg(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     cohort: Mapped["Cohort"] = relationship(back_populates="legs")
+
+
+class StrategyTickLog(Base):
+    """Per-tick decision log for the strategy runner.
+
+    Every time the runner evaluates a (bot, timeframe, symbol) it writes
+    one row capturing what it saw and what it decided — entry, skip,
+    scale-in, partial-close, trail, exit.
+
+    The /strategy dashboard renders these live so users can see the bot's
+    "thinking" — including SKIPs (the most informative case: "BTC
+    confidence 0.42 was below threshold 0.80, no entry").
+
+    Auto-archived: a startup cleanup keeps only the most recent N rows
+    per (bot, timeframe) to bound disk usage.
+    """
+
+    __tablename__ = "strategy_tick_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id"), index=True, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    timeframe: Mapped[str] = mapped_column(String(8), nullable=False)
+    tick_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    forecast_drift: Mapped[float | None] = mapped_column(Float, nullable=True)
+    forecast_std: Mapped[float | None] = mapped_column(Float, nullable=True)
+    forecast_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Decision discriminator. Values: "entry_long" | "entry_short" |
+    # "skip_below_threshold" | "skip_existing_position" | "skip_paused" |
+    # "scale_in" | "partial_close" | "trail_sl" | "exit" | "error"
+    decision: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra: Mapped[str] = mapped_column(Text, default="{}")

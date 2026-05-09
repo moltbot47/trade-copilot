@@ -117,6 +117,34 @@ def _apply_lightweight_migrations() -> None:
         # FLOAT + DEFAULT <literal> are accepted by both SQLite and Postgres.
         ("cohorts", "max_favorable_r_seen", "FLOAT DEFAULT 0.0"),
     ]
+    # StrategyTickLog auto-archive: keep only the most recent N rows per
+    # (bot, timeframe). Cheap on every boot.
+    try:
+        from sqlalchemy import text as _t
+        from app.db.models import StrategyTickLog  # ensure imported
+        del StrategyTickLog
+        _MAX_TICKS_PER_KEY = 10_000
+        with engine.begin() as conn:
+            # Compatible across SQLite and Postgres: delete rows whose id is
+            # not in the latest N for their (bot_id, timeframe) bucket.
+            conn.execute(_t(
+                """
+                DELETE FROM strategy_tick_log
+                WHERE id IN (
+                  SELECT id FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                             PARTITION BY bot_id, timeframe
+                             ORDER BY id DESC
+                           ) AS rn
+                    FROM strategy_tick_log
+                  ) ranked
+                  WHERE ranked.rn > :n
+                )
+                """
+            ), {"n": _MAX_TICKS_PER_KEY})
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        logger.warning("strategy_tick_log archive failed: %s", exc)
     insp = inspect(engine)
     with engine.begin() as conn:
         existing_tables = set(insp.get_table_names())
