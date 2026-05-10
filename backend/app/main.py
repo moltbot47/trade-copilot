@@ -130,6 +130,7 @@ def _apply_lightweight_migrations() -> None:
         ("users", "circuit_breaker_tripped_at", "DATETIME DEFAULT NULL"),
         ("users", "failed_login_count", "INTEGER DEFAULT 0"),
         ("users", "locked_until", "DATETIME DEFAULT NULL"),
+        ("users", "discord_webhook_url", "TEXT DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.

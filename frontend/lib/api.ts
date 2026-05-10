@@ -239,6 +239,53 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ bot_id: botId, timeframe: tf }),
     }),
+
+  // Settings — per-user Discord webhook
+  getDiscordWebhook: () =>
+    request<{ has_webhook: boolean; masked: string | null }>(
+      "/api/users/me/discord-webhook",
+    ),
+  setDiscordWebhook: (url: string | null) =>
+    request<{ has_webhook: boolean; masked: string | null }>(
+      "/api/users/me/discord-webhook",
+      { method: "PUT", body: JSON.stringify({ url }) },
+    ),
+  testDiscordWebhook: () =>
+    request<{ status: string }>("/api/users/me/discord-webhook/test", {
+      method: "POST",
+    }),
+
+  // MFA
+  getMfaStatus: () => request<{ enabled: boolean }>("/api/auth/mfa/status"),
+  setupMfa: () =>
+    request<{ secret: string; otpauth_uri: string; enabled: boolean }>(
+      "/api/auth/mfa/setup",
+      { method: "POST" },
+    ),
+  verifyMfa: (code: string) =>
+    request<{ enabled: boolean }>("/api/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  disableMfa: (code: string) =>
+    request<{ enabled: boolean }>("/api/auth/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
+  // Audit log (own actions only)
+  getAuditLog: (limit: number = 50) =>
+    request<Array<{ ts: string; action: string; details: string; client_ip: string | null }>>(
+      `/api/auth/audit-log?limit=${limit}`,
+    ),
+
+  // Panic stop (global pause for this user)
+  getPanic: () => request<{ bot_paused: boolean }>("/api/users/me/panic"),
+  setPanic: (paused: boolean) =>
+    request<{ bot_paused: boolean }>("/api/users/me/panic", {
+      method: "POST",
+      body: JSON.stringify({ paused }),
+    }),
 };
 
 export { getUserEmail };

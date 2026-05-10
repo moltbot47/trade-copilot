@@ -106,6 +106,12 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Per-user Discord webhook for personalized signal posts. When set,
+    # the runner posts that user's trade decisions to their own channel
+    # rather than (or in addition to) the global webhook. Validated to
+    # match a discord.com/api/webhooks/... shape.
+    discord_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["Execution"]] = relationship(back_populates="user")
 

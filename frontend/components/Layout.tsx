@@ -9,20 +9,60 @@ import ConnectionStatus from "./ConnectionStatus";
 const NAV = [
   { href: "/bots", label: "bots" },
   { href: "/strategy", label: "strategy" },
-  { href: "/calculator", label: "calculator" },
-  { href: "/connect", label: "connect" },
   { href: "/dashboard", label: "dashboard" },
+  { href: "/connect", label: "connect" },
+  { href: "/settings", label: "settings" },
+  { href: "/calculator", label: "calculator" },
   { href: "/donate", label: "donate" },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [panicPaused, setPanicPaused] = useState<boolean | null>(null);
+  const [panicBusy, setPanicBusy] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     setEmail(getUserEmail());
   }, []);
+
+  // Refresh panic status on mount + every 30s while logged in
+  useEffect(() => {
+    if (!email) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const r = await api.getPanic();
+        if (!cancelled) setPanicPaused(r.bot_paused);
+      } catch {
+        /* ignore — auth probably missing */
+      }
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [email]);
+
+  const togglePanic = async () => {
+    if (panicPaused === null) return;
+    const next = !panicPaused;
+    if (next && !confirm(
+      "PANIC STOP: this immediately halts all new entries for your account. Open positions stay open but no new trades will fire. Proceed?"
+    )) return;
+    setPanicBusy(true);
+    try {
+      const r = await api.setPanic(next);
+      setPanicPaused(r.bot_paused);
+    } catch (err) {
+      alert("Failed to update panic state: " + (err as Error).message);
+    } finally {
+      setPanicBusy(false);
+    }
+  };
 
   // Close mobile nav when navigating to a new path
   useEffect(() => {
@@ -109,6 +149,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.85rem" }}
         >
           <ConnectionStatus />
+          {email && panicPaused !== null && (
+            <button
+              onClick={togglePanic}
+              disabled={panicBusy}
+              title={
+                panicPaused
+                  ? "All entries currently halted — click to resume"
+                  : "Halt all new entries immediately"
+              }
+              style={{
+                background: panicPaused ? "var(--danger)" : "transparent",
+                border: `1px solid var(--danger)`,
+                color: panicPaused ? "white" : "var(--danger)",
+                padding: "0.45rem 0.85rem",
+                cursor: "pointer",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                fontSize: "0.8rem",
+                textTransform: "uppercase",
+                minHeight: 44,
+              }}
+            >
+              {panicBusy ? "…" : panicPaused ? "● paused" : "panic"}
+            </button>
+          )}
           {email ? (
             <>
               <span className="dim">user:</span>

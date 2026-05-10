@@ -862,6 +862,7 @@ class QuantRunner:
                     bot_id=self.bot_id,
                     timeframe=self.timeframe,
                     symbol=symbol,
+                    user_id=user_id,
                     current_price=current_price,
                     forecast_drift=(forecast_view or {}).get("drift"),
                     forecast_confidence=(forecast_view or {}).get("confidence"),

@@ -109,3 +109,134 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
 @router.get("/me", response_model=UserOut)
 def read_me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.model_validate(user)
+
+
+# ----- Per-user notification webhook (Discord) -----
+
+from pydantic import BaseModel, AnyUrl
+import re
+
+_DISCORD_WEBHOOK_PATTERN = re.compile(
+    r"^https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_\-]+$"
+)
+
+
+class DiscordWebhookRequest(BaseModel):
+    url: str | None  # None to clear
+
+
+class DiscordWebhookStatus(BaseModel):
+    has_webhook: bool
+    masked: str | None = None  # last 6 chars only for display
+
+
+def _mask_webhook(url: str | None) -> str | None:
+    if not url:
+        return None
+    if len(url) <= 12:
+        return "***"
+    return f"...{url[-6:]}"
+
+
+@router.get("/me/discord-webhook", response_model=DiscordWebhookStatus)
+def get_discord_webhook(user: User = Depends(get_current_user)) -> DiscordWebhookStatus:
+    return DiscordWebhookStatus(
+        has_webhook=bool(user.discord_webhook_url),
+        masked=_mask_webhook(user.discord_webhook_url),
+    )
+
+
+@router.put("/me/discord-webhook", response_model=DiscordWebhookStatus)
+def set_discord_webhook(
+    payload: DiscordWebhookRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DiscordWebhookStatus:
+    """Save the user's personal Discord webhook URL. Pass null to clear."""
+    if payload.url is None or payload.url.strip() == "":
+        user.discord_webhook_url = None
+    else:
+        url = payload.url.strip()
+        if not _DISCORD_WEBHOOK_PATTERN.match(url):
+            raise HTTPException(
+                status_code=400,
+                detail="invalid_discord_webhook_url — expected https://discord.com/api/webhooks/<id>/<token>",
+            )
+        user.discord_webhook_url = url
+    db.commit()
+    from app.core.audit import record_audit
+    record_audit(db, user=user, action="risk_setting_changed",
+                 details={"field": "discord_webhook_url", "set": bool(user.discord_webhook_url)})
+    db.commit()
+    return DiscordWebhookStatus(
+        has_webhook=bool(user.discord_webhook_url),
+        masked=_mask_webhook(user.discord_webhook_url),
+    )
+
+
+class PanicRequest(BaseModel):
+    paused: bool
+
+
+class PanicStatus(BaseModel):
+    bot_paused: bool
+
+
+@router.get("/me/panic", response_model=PanicStatus)
+def get_panic(user: User = Depends(get_current_user)) -> PanicStatus:
+    return PanicStatus(bot_paused=bool(user.bot_paused))
+
+
+@router.post("/me/panic", response_model=PanicStatus)
+def set_panic(
+    payload: PanicRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PanicStatus:
+    """Toggle the global bot_paused flag.
+
+    When True, the runner skips every entry decision for this user. Any
+    open positions continue to be managed (trailing stops still trail);
+    but no new entries will fire until the user clears the panic state.
+    """
+    prev = bool(user.bot_paused)
+    user.bot_paused = bool(payload.paused)
+    db.commit()
+    from app.core.audit import record_audit
+    record_audit(
+        db, user=user,
+        action="bot_paused" if user.bot_paused else "bot_unpaused",
+        details={"prev": prev, "new": user.bot_paused},
+    )
+    db.commit()
+    return PanicStatus(bot_paused=user.bot_paused)
+
+
+@router.post("/me/discord-webhook/test")
+async def test_discord_webhook(user: User = Depends(get_current_user)) -> dict:
+    """Send a test message to the user's configured webhook to verify it."""
+    if not user.discord_webhook_url:
+        raise HTTPException(status_code=400, detail="no_webhook_configured")
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.post(
+                user.discord_webhook_url,
+                json={
+                    "embeds": [{
+                        "title": "🔌 Trade Copilot webhook test",
+                        "description": f"Your bot will post signals here. user={user.email}",
+                        "color": 0x00C853,
+                    }]
+                },
+            )
+            if r.status_code >= 400:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"webhook_rejected status={r.status_code}",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"webhook_unreachable: {exc}")
+    return {"status": "sent"}

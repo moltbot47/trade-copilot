@@ -98,8 +98,26 @@ _COLORS["skip_existing_position"] = 0x546E7A
 _COLORS["skip_position_cap"] = 0x546E7A
 
 
-def _webhook_url() -> str | None:
-    """Return the first non-empty webhook URL from the supported env names."""
+def _webhook_url(user_id: int | None = None) -> str | None:
+    """Return the webhook URL for a given user, falling back to the global env.
+
+    Priority: user.discord_webhook_url (if user_id given) > env vars > None.
+    Per-user webhooks let each customer route their bot's signals to their
+    own private channel, instead of everyone sharing the operator's webhook.
+    """
+    if user_id is not None:
+        try:
+            from app.db.database import SessionLocal
+            from app.db.models import User
+            db = SessionLocal()
+            try:
+                u = db.query(User).filter(User.id == user_id).first()
+                if u and u.discord_webhook_url:
+                    return u.discord_webhook_url
+            finally:
+                db.close()
+        except Exception:
+            pass  # fall through to env
     for name in _DISCORD_WEBHOOK_ENV_NAMES:
         v = os.environ.get(name)
         if v:
@@ -174,6 +192,7 @@ async def post_decision(
     bot_id: int,
     timeframe: str,
     symbol: str,
+    user_id: int | None = None,
     current_price: float | None = None,
     forecast_drift: float | None = None,
     forecast_confidence: float | None = None,
@@ -185,10 +204,14 @@ async def post_decision(
 
     Best-effort — failures are logged at WARNING but not raised. Decisions
     not in the high-signal allowlist are silently skipped.
+
+    If ``user_id`` is provided AND that user has set a personal
+    discord_webhook_url, the post goes there instead of the global webhook.
+    Falls back to global if the per-user URL fails.
     """
     if decision not in HIGH_SIGNAL_DECISIONS:
         return
-    url = _webhook_url()
+    url = _webhook_url(user_id)
     if not url:
         return  # not configured; silent
 
