@@ -100,6 +100,12 @@ class User(Base):
     circuit_breaker_cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60)
     circuit_breaker_tripped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Login lockout (OWASP ASVS V2): 5 consecutive failures locks the
+    # account for 15 minutes. Reset on successful login. Tracked in DB
+    # rather than memory so it survives restarts.
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["Execution"]] = relationship(back_populates="user")
 
@@ -251,6 +257,29 @@ class PerformanceSnapshot(Base):
 
     threshold_after: Mapped[float] = mapped_column(Float, default=1.5)
     feedback_action: Mapped[str | None] = mapped_column(String(32), nullable=True)  # tighten|loosen|pause|hold
+
+
+class AuditLog(Base):
+    """Append-only audit trail for security-sensitive actions.
+
+    OWASP ASVS V7 requires logging of authentication events, credential
+    changes, and authorization decisions. We also log changes to risk
+    settings (cap, kill switch, panic toggle) so forensic review can
+    answer "who changed what, when, from where".
+
+    NEVER store secrets in `details` — only references and field names.
+    """
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=True,
+    )
+    actor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    details: Mapped[str] = mapped_column(Text, default="{}")
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Cohort(Base):

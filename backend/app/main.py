@@ -128,6 +128,8 @@ def _apply_lightweight_migrations() -> None:
         ("users", "circuit_breaker_n_losses", "INTEGER DEFAULT NULL"),
         ("users", "circuit_breaker_cooldown_minutes", "INTEGER DEFAULT 60"),
         ("users", "circuit_breaker_tripped_at", "DATETIME DEFAULT NULL"),
+        ("users", "failed_login_count", "INTEGER DEFAULT 0"),
+        ("users", "locked_until", "DATETIME DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
@@ -412,6 +414,15 @@ async def lifespan(_: FastAPI):
     _seed_advanced_bots()
 
     refresh_task = _aio.create_task(_periodic_token_refresh_task())
+
+    # Position reconciliation — periodic DB↔broker drift detection.
+    from app.strategies.reconciliation import periodic_reconciliation_task
+    reconcile_task = _aio.create_task(periodic_reconciliation_task())
+
+    # Daily summary — posts to Discord at 00:00 UTC.
+    from app.monitoring.daily_summary import daily_summary_task
+    summary_task = _aio.create_task(daily_summary_task())
+
     # Auto-resume runners that were running before the last shutdown.
     try:
         await _auto_resume_runners()
@@ -420,11 +431,12 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        refresh_task.cancel()
-        try:
-            await refresh_task
-        except _aio.CancelledError:
-            pass
+        for task in (refresh_task, reconcile_task, summary_task):
+            task.cancel()
+            try:
+                await task
+            except _aio.CancelledError:
+                pass
 
 
 settings = get_settings()

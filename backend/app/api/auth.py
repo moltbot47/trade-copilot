@@ -85,6 +85,24 @@ def login(
 
     settings = get_settings()
     user = get_or_create_user(db, str(payload.email))
+    from app.core.audit import record_audit
+    from datetime import datetime, timedelta
+    client_ip = request.client.host if request.client else None
+
+    # Lockout check (OWASP ASVS V2): if the account is currently locked,
+    # refuse even before checking MFA. Lockout window expires automatically
+    # — no operator intervention needed.
+    LOCKOUT_THRESHOLD = 5
+    LOCKOUT_MINUTES = 15
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        record_audit(db, user=user, action="login_failed",
+                     details={"reason": "account_locked"}, client_ip=client_ip)
+        db.commit()
+        raise HTTPException(
+            status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="account_locked",
+            headers={"Retry-After": str(int((user.locked_until - datetime.utcnow()).total_seconds()))},
+        )
 
     # MFA gate — if this user has enabled TOTP, the email is not enough.
     # We reject with a 401 + a distinguishable detail string so the frontend
@@ -93,12 +111,24 @@ def login(
         from app.auth.mfa import decrypt_secret, verify_code
 
         if not payload.mfa_code:
+            record_audit(db, user=user, action="login_failed",
+                         details={"reason": "mfa_required"}, client_ip=client_ip)
+            db.commit()
             raise HTTPException(
                 status_code=http_status.HTTP_401_UNAUTHORIZED,
                 detail="mfa_required",
             )
         secret = decrypt_secret(user.mfa_secret)
         if not secret or not verify_code(secret, payload.mfa_code):
+            # Failed MFA counts toward lockout — a brute-forcer cycling
+            # through codes shouldn't get infinite attempts.
+            user.failed_login_count = (user.failed_login_count or 0) + 1
+            if user.failed_login_count >= LOCKOUT_THRESHOLD:
+                user.locked_until = datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
+                record_audit(db, user=user, action="account_locked",
+                             details={"after_failures": user.failed_login_count}, client_ip=client_ip)
+            record_audit(db, user=user, action="mfa_invalid_code", client_ip=client_ip)
+            db.commit()
             raise HTTPException(
                 status_code=http_status.HTTP_401_UNAUTHORIZED,
                 detail="mfa_invalid_code",
@@ -108,6 +138,14 @@ def login(
     max_age = settings.SESSION_TTL_DAYS * 24 * 60 * 60
     _set_session_cookie(response, token, max_age)
     logger.info("login: %s (exp=%s)", user.email, expires_at.isoformat())
+    # Successful login — reset lockout counter
+    if (user.failed_login_count or 0) > 0:
+        record_audit(db, user=user, action="account_unlocked",
+                     details={"prior_failed": user.failed_login_count}, client_ip=client_ip)
+    user.failed_login_count = 0
+    user.locked_until = None
+    record_audit(db, user=user, action="login_success", client_ip=client_ip)
+    db.commit()
 
     # Boot the TradeLocker relay if the user has a stored token.
     # Best-effort — failures here must not block login.
@@ -175,3 +213,41 @@ def me(user: User = Depends(get_current_user)) -> MeResponse:
         tradelocker_account_id=user.tradelocker_account_id,
         tradelocker_env=user.tradelocker_env or "demo",
     )
+
+
+class AuditLogEntry(BaseModel):
+    ts: str
+    action: str
+    details: str
+    client_ip: str | None = None
+
+
+@router.get("/audit-log", response_model=list[AuditLogEntry])
+def my_audit_log(
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[AuditLogEntry]:
+    """Return the current user's audit log (most recent N entries).
+
+    Owner-only — each user can see only their own actions. Useful for
+    "was that me?" verification after a suspicious notification.
+    """
+    from app.db.models import AuditLog
+
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.user_id == user.id)
+        .order_by(AuditLog.id.desc())
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+    return [
+        AuditLogEntry(
+            ts=r.ts.isoformat() if r.ts else "",
+            action=r.action,
+            details=r.details or "{}",
+            client_ip=r.client_ip,
+        )
+        for r in rows
+    ]
