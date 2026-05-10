@@ -317,6 +317,7 @@ async def global_exception_handler(_, exc: Exception):
 # Operational endpoints (no /api prefix — standard for liveness/metrics)
 app.include_router(health_api.router)   # /health, /health/detail
 app.include_router(metrics_api.router)  # /metrics
+app.include_router(metrics_api.latency_router, prefix="/api")  # /api/metrics/latency
 
 # Mount routers under /api
 app.include_router(auth.router, prefix="/api")
