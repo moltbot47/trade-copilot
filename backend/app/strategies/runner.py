@@ -930,6 +930,32 @@ class QuantRunner:
                         try:
                             await self._execute_command(tm, cohort, cmd, user, token, client, current_price or cohort.weighted_avg_entry)
                             tm_db.commit()
+                            # Map command kind → tick decision for Discord/WS fanout.
+                            # modify_sl (routine trailing) is suppressed to keep noise down;
+                            # everything else is high-signal and gets posted.
+                            decision_map = {
+                                "scale_in": "scale_in",
+                                "partial_close": "partial_close",
+                                "exit_all": "hard_exit",
+                            }
+                            decision = decision_map.get(cmd.kind)
+                            if decision:
+                                self._log_tick(
+                                    symbol,
+                                    decision,
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason=cmd.reason or cmd.kind,
+                                    user_id=user.id,
+                                    extra={
+                                        "qty": cmd.qty,
+                                        "sl": cmd.new_stop,
+                                        "tp": cohort.initial_take_profit,
+                                        "cohort_id": cohort.id,
+                                        "side": cohort.side,
+                                    },
+                                )
                         except Exception as exc:
                             tm_db.rollback()
                             logger.warning("cmd %s on cohort %s failed: %s", cmd.kind, cohort.id, exc)
