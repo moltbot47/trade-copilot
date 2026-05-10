@@ -211,7 +211,7 @@ async def handle_pong(conn: Connection, ws: WebSocket, frame: dict[str, Any]) ->
 # Frames accepted before auth completes.
 PRE_AUTH_TYPES = {"auth", "ping"}
 
-ROUTES = {
+ROUTES: dict[str, Any] = {
     "auth": handle_auth,
     "subscribe": handle_subscribe,
     "unsubscribe": handle_unsubscribe,

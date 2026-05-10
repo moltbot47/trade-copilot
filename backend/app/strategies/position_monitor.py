@@ -143,7 +143,8 @@ class PositionMonitor:
                     if pos is not None:
                         # Update high-water marks using avgPrice as a proxy for current
                         try:
-                            cur = float(pos.get("avgPrice"))
+                            _avg = pos.get("avgPrice")
+                            cur = float(_avg) if _avg is not None else track["entry"]
                         except (TypeError, ValueError):
                             cur = track["entry"]
                         delta = cur - track["entry"]

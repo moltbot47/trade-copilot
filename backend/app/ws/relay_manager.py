@@ -28,13 +28,13 @@ logger = logging.getLogger(__name__)
 RelayFactory = Callable[[int], Awaitable[None]]
 
 
-def _default_factory(user_id: int) -> Awaitable[None]:
+async def _default_factory(user_id: int) -> None:
     # Imported lazily to avoid an import cycle (tradelocker_relay imports
     # event_bus, which is also imported via app.ws.__init__).
     from app.ws.tradelocker_relay import TradeLockerRelay
 
     relay = TradeLockerRelay(user_id=user_id)
-    return relay.run()
+    await relay.run()
 
 
 class RelayManager:
@@ -68,8 +68,12 @@ class RelayManager:
             )
             return None
 
-        coro = self._factory(user_id)
-        task = loop.create_task(coro, name=f"tl-relay-{user_id}")
+        async def _run() -> None:
+            await self._factory(user_id)
+
+        task: asyncio.Task[None] = loop.create_task(
+            _run(), name=f"tl-relay-{user_id}"
+        )
         self._tasks[user_id] = task
 
         def _cleanup(t: asyncio.Task) -> None:

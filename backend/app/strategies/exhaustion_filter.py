@@ -25,6 +25,8 @@ fine for shorts but here we want a buy → we need rejection at the
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -91,7 +93,7 @@ def passes_no_chase(
     current = float(closes[-1])
     range_pos = (current - recent_low) / span if span > 0 else 0.5
 
-    diag = {
+    diag: dict[str, Any] = {
         "rsi": round(rsi, 2),
         "range_pos": round(range_pos, 3),
         "recent_high": round(recent_high, 2),
@@ -165,7 +167,7 @@ def passes_exhaustion(
     upper_wick_ratio = (upper_wick / body) if body > 0 else float("inf")
     lower_wick_ratio = (lower_wick / body) if body > 0 else float("inf")
 
-    diag = {
+    diag: dict[str, Any] = {
         "rsi": round(rsi, 2),
         "body_ratio": round(body_ratio, 3),
         "upper_wick_ratio": round(upper_wick_ratio, 2),

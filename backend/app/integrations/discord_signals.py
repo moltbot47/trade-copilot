@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # In-process cache for the rolling W/L counter. The Discord publisher fires
 # once per tick (~2/min on 1m × 2 symbols), so a 30-sec TTL is plenty —
 # avoids hammering the DB with the same COUNT(*) twice per minute.
-_COUNTER_CACHE: dict[int, tuple[float, dict]] = {}
+_COUNTER_CACHE: dict[int, tuple[float, dict | None]] = {}
 _COUNTER_TTL_SECONDS = 30.0
 
 # Two env-var names supported (DISCORD_WEBHOOK_URL is the older one some

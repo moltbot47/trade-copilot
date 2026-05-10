@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -75,6 +75,7 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
     # Dispatch based on strategy type. TradingView-webhook bots (orb,
     # squeeze, stoch_hook) are NOT launched via this endpoint — they fire
     # from the /webhook/{slug} route on every TV alert.
+    runner: Union[StrategyRunner, QuantRunner]
     if bot.strategy_type == StrategyType.latpfn_momentum:
         runner = await StrategyRunner.start(
             db_session_factory=SessionLocal,

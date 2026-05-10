@@ -18,7 +18,7 @@ from app.ws.tradelocker_relay import TradeLockerRelay
 try:  # pragma: no cover — wired up once Wave 3A lands
     from app.ws.event_bus import EventBus, event_bus  # noqa: F401
 except Exception:  # pragma: no cover
-    EventBus = None  # type: ignore[assignment]
+    EventBus = None  # type: ignore[assignment,misc]
     event_bus = None  # type: ignore[assignment]
 
 try:  # pragma: no cover

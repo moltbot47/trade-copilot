@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import numpy as np
@@ -237,7 +237,7 @@ class BarFetcher:
             "Authorization": f"Bearer {self.token}",
             "accNum": str(self.acc_num),
         }
-        params = {
+        params: dict[str, Any] = {
             "tradableInstrumentId": tradable_id,
             "routeId": route_id,
             "resolution": resolution,

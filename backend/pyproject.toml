@@ -1,0 +1,56 @@
+[project]
+name = "trade-copilot-backend"
+version = "0.1.0"
+description = "Trade Copilot — automated trading SaaS backend"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.10.0",
+    "ruff>=0.4.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "respx>=0.21.0",
+    "types-python-jose",
+]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+strict_equality = true
+
+# Third-party libs without proper stubs in our env.
+[[tool.mypy.overrides]]
+module = [
+    "slowapi",
+    "slowapi.*",
+    "respx",
+    "reportlab",
+    "reportlab.*",
+    "sentry_sdk",
+    "sentry_sdk.*",
+    "prometheus_client",
+    "prometheus_client.*",
+    "structlog",
+    "structlog.*",
+    "jose",
+    "jose.*",
+    "bcrypt",
+    "cryptography",
+    "cryptography.*",
+    "psycopg2",
+    "psycopg2.*",
+    "pandas",
+    "pandas.*",
+    "numpy",
+    "numpy.*",
+]
+ignore_missing_imports = true

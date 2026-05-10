@@ -66,10 +66,11 @@ class LaTPFNClient:
             }
 
         # Real HTTP call
+        endpoint = self.endpoint_url or ""
         payload = {"closes": closes.tolist(), "n_predict": int(n_predict)}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as c:
-                r = await c.post(f"{self.endpoint_url.rstrip('/')}/forecast", json=payload)
+                r = await c.post(f"{endpoint.rstrip('/')}/forecast", json=payload)
                 r.raise_for_status()
                 data = r.json()
         except httpx.HTTPError as exc:

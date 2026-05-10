@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from sqlalchemy.orm import Session
 
@@ -443,7 +443,7 @@ class StrategyRunner:
         finally:
             db.close()
 
-    def _safe_state_update(self, mutator: callable, label: str) -> None:
+    def _safe_state_update(self, mutator: Callable[[Any], None], label: str) -> None:
         """Run a state-row mutator inside a short-lived session — never crash."""
         db = self.db_session_factory()
         try:
@@ -1191,13 +1191,16 @@ class QuantRunner:
         token: str,
         client: TradeLockerClient,
     ) -> None:
+        account_id = user.tradelocker_account_id
+        if not account_id:
+            raise ValueError(f"user {user.id} has no tradelocker_account_id")
         atr = float(sig.extra.get("atr", 0.0))
         logger.info(
             "place_order request: %s %s qty=%.4f entry=%.2f SL=%.2f TP=%.2f",
             sig.side, sig.symbol, sig.qty, sig.entry_price, sig.stop_loss or 0.0, sig.take_profit or 0.0,
         )
         order = await client.place_order(
-            account_id=user.tradelocker_account_id,
+            account_id=account_id,
             token=token,
             acc_num=user.tradelocker_acc_num or "1",
             symbol=sig.symbol,
@@ -1218,14 +1221,14 @@ class QuantRunner:
         # side", which on a hedging account with multiple same-direction
         # positions would link to a pre-existing trade.
         positions = await client.get_positions(
-            user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+            account_id, token, user.tradelocker_acc_num or "1"
         )
 
         # Resolve target tradable_id once
         target_tid = None
         try:
             target_tid, _ = await client.resolve_symbol(
-                user.tradelocker_account_id, token, user.tradelocker_acc_num or "1", sig.symbol,
+                account_id, token, user.tradelocker_acc_num or "1", sig.symbol,
             )
         except Exception:
             pass
@@ -1332,7 +1335,7 @@ class QuantRunner:
     async def _execute_command(
         self,
         tm: TradeManager,
-        cohort: "Cohort",  # noqa
+        cohort: Any,
         cmd: CohortCommand,
         user: User,
         token: str,
@@ -1342,9 +1345,14 @@ class QuantRunner:
         from app.db.models import Cohort  # avoid circular at import time
 
         assert isinstance(cohort, Cohort)
+        account_id = user.tradelocker_account_id
+        if not account_id:
+            raise ValueError(f"user {user.id} has no tradelocker_account_id")
         if cmd.kind == "scale_in":
+            if cmd.new_stop is None:
+                raise ValueError("scale_in command missing new_stop")
             order = await client.place_order(
-                account_id=user.tradelocker_account_id,
+                account_id=account_id,
                 token=token,
                 acc_num=user.tradelocker_acc_num or "1",
                 symbol=cohort.instrument,
@@ -1355,7 +1363,7 @@ class QuantRunner:
             )
             order_id = str(order.get("order_id") or "")
             positions = await client.get_positions(
-                user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+                account_id, token, user.tradelocker_acc_num or "1"
             )
             pos_id = None
             for p in reversed(positions):
@@ -1405,11 +1413,18 @@ class QuantRunner:
                     cohort.id,
                 )
                 return
+            position_id = close_leg.tradelocker_position_id
+            if not position_id:
+                logger.warning(
+                    "partial_close skipped for cohort %s: leg has no broker position id",
+                    cohort.id,
+                )
+                return
             close_resp = await client.partial_close(
-                account_id=user.tradelocker_account_id,
+                account_id=account_id,
                 token=token,
                 acc_num=user.tradelocker_acc_num or "1",
-                position_id=close_leg.tradelocker_position_id,
+                position_id=position_id,
                 symbol=cohort.instrument,
                 original_side=cohort.side,
                 qty=cmd.qty,
@@ -1519,7 +1534,7 @@ class QuantRunner:
         finally:
             db.close()
 
-    def _safe_state_update(self, mutator: callable, label: str) -> None:
+    def _safe_state_update(self, mutator: Callable[[Any], None], label: str) -> None:
         """Run a state-row mutator inside its own short-lived session.
 
         Swallows DB errors (lock, transient connection issue) and logs at

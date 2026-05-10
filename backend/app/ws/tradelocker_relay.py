@@ -113,11 +113,8 @@ def map_position(pos: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         avg_price = None
     try:
-        unrealized = (
-            float(pos.get("unrealizedPl"))
-            if pos.get("unrealizedPl") is not None
-            else None
-        )
+        _u = pos.get("unrealizedPl")
+        unrealized = float(_u) if _u is not None else None
     except (TypeError, ValueError):
         unrealized = None
     return {

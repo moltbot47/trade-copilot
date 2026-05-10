@@ -29,7 +29,7 @@ except Exception:  # pragma: no cover
     def Gauge(*_a, **_kw): return _Noop()  # type: ignore[no-redef]
     def Histogram(*_a, **_kw): return _Noop()  # type: ignore[no-redef]
 
-    def generate_latest() -> bytes:  # type: ignore[no-redef]
+    def generate_latest(*_a, **_kw) -> bytes:  # type: ignore[misc]
         return b"# prometheus_client not installed\n"
 
 
