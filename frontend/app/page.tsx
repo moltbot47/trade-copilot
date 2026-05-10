@@ -66,8 +66,9 @@ export default function HomePage() {
         </h1>
         <p style={{ fontSize: "1.05rem", color: "var(--text)", maxWidth: 700 }}>
           Pick a strategy bot. Connect your TradeLocker account. Pick how
-          aggressive you want it. Watch the trades happen on a live terminal
-          dashboard. Tip a coffee if you like it.
+          aggressive you want it. Watch every trade decision land in your
+          own Discord channel with full confidence scores. Tip a coffee if
+          you like it.
         </p>
         <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", flexWrap: "wrap" }}>
           <Link href="/bots" className="btn btn-primary">

@@ -452,6 +452,47 @@ export default function StrategyPage() {
         </div>
       </section>
 
+      {/* First-time-user onboarding checklist — shown only if no state
+          (never connected) OR no trades closed yet. Disappears once
+          there's real activity. */}
+      {!state?.is_running && recentTrades.length === 0 && (
+        <section
+          className="card"
+          aria-label="Onboarding checklist"
+          style={{ padding: "1rem 1.25rem", borderColor: "var(--accent-dim)" }}
+        >
+          <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }} className="accent">
+            {">"} getting started
+          </h2>
+          <p className="dim" style={{ marginTop: 0, fontSize: "0.88rem" }}>
+            Four steps to take your first bot trade.
+          </p>
+          <ol style={{ paddingLeft: "1.4rem", marginTop: "0.5rem", lineHeight: 1.8, fontSize: "0.9rem" }}>
+            <li>
+              <a href="/connect">Connect your TradeLocker account</a>{" "}
+              <span className="dim">— demo first, then live when ready</span>
+            </li>
+            <li>
+              <a href="/settings/notifications">Configure Discord notifications</a>{" "}
+              <span className="dim">— paste a webhook URL to see signals as they fire</span>
+            </li>
+            <li>
+              <a href="/bots">Subscribe to a bot</a>{" "}
+              <span className="dim">— the LaT-PFN Quant trader is a good starting point</span>
+            </li>
+            <li>
+              Click <b>[start]</b> above{" "}
+              <span className="dim">— the runner starts ticking and posts to Discord on every decision</span>
+            </li>
+          </ol>
+          <p className="dim" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+            We recommend enabling{" "}
+            <a href="/settings/security">two-factor auth</a> on your account
+            before going live.
+          </p>
+        </section>
+      )}
+
       {/* Equity curve */}
       <section className="card">
         <h2 style={{ marginTop: 0 }} className="accent">

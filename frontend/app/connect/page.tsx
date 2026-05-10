@@ -288,19 +288,57 @@ export default function ConnectPage() {
             </p>
           )}
           {(result?.success || result?.status === "connected") && (
-            <p
+            <div
               role="status"
               aria-live="polite"
-              className="accent"
-              style={{ margin: 0 }}
+              style={{
+                margin: 0,
+                padding: "0.85rem 1rem",
+                border: "1px solid var(--accent)",
+                background: "rgba(0, 200, 83, 0.05)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
             >
-              connected
-              {result.account_id
-                ? ` — ${result.account_id}`
-                : result.detail
-                  ? ` — ${result.detail}`
-                  : ""}
-            </p>
+              <span className="accent" style={{ fontWeight: 700 }}>
+                ✓ connected
+                {result.account_id
+                  ? ` — ${result.account_id}`
+                  : result.detail
+                    ? ` — ${result.detail}`
+                    : ""}
+              </span>
+              <span className="dim" style={{ fontSize: "0.85rem" }}>
+                Next: pick a bot to start trading.
+              </span>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <a
+                  href="/bots"
+                  className="btn"
+                  style={{
+                    padding: "0.55rem 1rem",
+                    background: "var(--accent)",
+                    color: "var(--bg)",
+                    border: "none",
+                    textDecoration: "none",
+                    fontWeight: 700,
+                  }}
+                >
+                  pick a bot →
+                </a>
+                <a
+                  href="/settings/notifications"
+                  className="btn"
+                  style={{
+                    padding: "0.55rem 1rem",
+                    textDecoration: "none",
+                  }}
+                >
+                  set up Discord
+                </a>
+              </div>
+            </div>
           )}
         </form>
 
