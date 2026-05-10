@@ -1,23 +1,20 @@
 "use client";
 
 import type { PerformanceSnapshot } from "@/lib/types";
+import { formatLocalTime } from "@/lib/datetime";
 
 type Props = {
   snapshots: PerformanceSnapshot[];
   limit?: number;
 };
 
-function formatTime(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat(undefined, {
+const formatTime = (iso: string) =>
+  formatLocalTime(iso, {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(d);
-}
+  });
 
 const ACTION_COLOR: Record<string, string> = {
   tighten: "var(--warn)",

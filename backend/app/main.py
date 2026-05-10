@@ -184,6 +184,41 @@ def _apply_lightweight_migrations() -> None:
         except Exception as exc:
             logger.warning("max_concurrent_positions bump failed: %s", exc)
 
+        # One-time cleanup: delete phantom trades from the synthetic-data
+        # bug (pre-2026-05-10 fix). Synthetic BTC bars priced at ~$118
+        # generated fake TradeOutcome rows that were never placed at the
+        # broker. Using $1000 as the floor since a real BTC trade would
+        # never be that low. Same for ETH (real >= $1000 in 2026).
+        try:
+            sql_clean_btc = text(
+                "DELETE FROM trade_outcomes WHERE instrument = :sym AND entry_price < 1000"
+            )
+            sql_clean_eth = text(
+                "DELETE FROM trade_outcomes WHERE instrument = :sym AND entry_price < 100"
+            )
+            r1 = conn.execute(sql_clean_btc, {"sym": "BTCUSD"})
+            r2 = conn.execute(sql_clean_eth, {"sym": "ETHUSD"})
+            sql_clean_cohorts = text(
+                "DELETE FROM cohort_legs WHERE entry_price < 100 AND instrument IN (SELECT instrument FROM cohorts WHERE id = cohort_id)"
+            )
+            sql_clean_cohort_rows = text(
+                "DELETE FROM cohorts WHERE (instrument = 'BTCUSD' AND weighted_avg_entry < 1000) OR (instrument = 'ETHUSD' AND weighted_avg_entry < 100)"
+            )
+            try:
+                r3 = conn.execute(sql_clean_cohort_rows)
+            except Exception:
+                r3 = None
+            total = (r1.rowcount if r1 else 0) + (r2.rowcount if r2 else 0)
+            cohort_total = (r3.rowcount if r3 else 0)
+            if total or cohort_total:
+                logger.info(
+                    "migration: cleaned %d phantom trade_outcomes + %d cohorts (synthetic-data bug)",
+                    total,
+                    cohort_total,
+                )
+        except Exception as exc:
+            logger.warning("phantom-trade cleanup failed: %s", exc)
+
 
 async def _periodic_token_refresh_task() -> None:
     """Background task: refresh all TradeLocker tokens every 6 hours.

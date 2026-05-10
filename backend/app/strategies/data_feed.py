@@ -117,7 +117,9 @@ class BarFetcher:
             )
         except TradeLockerError as exc:
             logger.warning("resolve_symbol failed for %s: %s — using synthetic", symbol, exc)
-            return self._synthetic(symbol, timeframe, count)
+            df = self._synthetic(symbol, timeframe, count)
+            df.attrs["synthetic"] = True
+            return df
 
         # History needs the INFO route (different from TRADE route).
         info_route_id = await self._resolve_info_route(symbol)
@@ -151,7 +153,9 @@ class BarFetcher:
             symbol,
             timeframe,
         )
-        return self._synthetic(symbol, timeframe, count)
+        df = self._synthetic(symbol, timeframe, count)
+        df.attrs["synthetic"] = True
+        return df
 
     async def _try_history(
         self,

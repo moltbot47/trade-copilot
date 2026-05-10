@@ -12,7 +12,13 @@ type SortKey = "time" | "r" | "pnl";
 
 function formatTime(iso: string): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  // Backend serializes datetime.utcnow() without a timezone marker, e.g.
+  // "2026-05-10T13:23:51". JavaScript treats that as local time per spec,
+  // so on US-CDT browsers it ends up 5h off. Force UTC interpretation by
+  // appending Z if the string has no timezone designator.
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso);
+  const normalized = hasTz ? iso : iso + "Z";
+  const d = new Date(normalized);
   if (Number.isNaN(d.getTime())) return iso;
   return new Intl.DateTimeFormat(undefined, {
     month: "short",

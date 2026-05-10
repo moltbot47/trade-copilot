@@ -905,6 +905,21 @@ class QuantRunner:
                 logger.warning("bars fetch failed %s: %s", symbol, exc)
                 self._log_tick(symbol, "error", reason=f"bars fetch failed: {exc}", threshold=threshold)
                 continue
+
+            # CRITICAL: never trade on synthetic fallback data. The data_feed
+            # marks synthetic frames with df.attrs['synthetic'] = True. If the
+            # broker is unreachable, we'd rather skip the tick than fire on
+            # fabricated prices (we lost real money to phantom trades — see
+            # the $118 BTC trade in trade_log on 2026-05-10).
+            if getattr(bars, "attrs", {}).get("synthetic"):
+                self._log_tick(
+                    symbol,
+                    "skip_synthetic_data",
+                    threshold=threshold,
+                    reason="bars are synthetic (broker unreachable) — refusing to trade",
+                )
+                continue
+
             current_price = float(bars["close"].iloc[-1]) if len(bars) else None
             forecast_view = await strategy.forecast_view(bars) if current_price else None
 

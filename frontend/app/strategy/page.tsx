@@ -28,7 +28,10 @@ const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD"];  // crypto-only by default; quant 
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  // Force UTC interpretation: backend serializes datetime.utcnow() without
+  // a tz marker, which JS treats as local time → 5h drift on US-CDT.
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso);
+  const d = new Date(hasTz ? iso : iso + "Z");
   if (Number.isNaN(d.getTime())) return iso;
   const diff = Date.now() - d.getTime();
   if (diff < 60_000) return `${Math.max(0, Math.round(diff / 1000))}s ago`;

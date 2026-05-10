@@ -38,12 +38,13 @@ const DECISION_COLOR: Record<string, string> = {
 };
 
 function fmtTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour12: false });
-  } catch {
-    return iso;
-  }
+  // Backend timestamps are naive UTC ("2026-05-10T13:23:51"); JS treats
+  // those as local time per spec, so we force UTC interpretation by
+  // appending Z when no tz suffix is present, then format in local tz.
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso);
+  const d = new Date(hasTz ? iso : iso + "Z");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString([], { hour12: false });
 }
 
 function fmtNum(v: number | null | undefined, digits = 2): string {
