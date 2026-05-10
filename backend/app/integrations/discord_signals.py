@@ -31,11 +31,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# In-process cache for the rolling W/L counter. The Discord publisher fires
+# once per tick (~2/min on 1m × 2 symbols), so a 30-sec TTL is plenty —
+# avoids hammering the DB with the same COUNT(*) twice per minute.
+_COUNTER_CACHE: dict[int, tuple[float, dict]] = {}
+_COUNTER_TTL_SECONDS = 30.0
 
 # Two env-var names supported (DISCORD_WEBHOOK_URL is the older one some
 # deployments are using; DISCORD_SIGNALS_WEBHOOK_URL is the newer canonical
@@ -98,6 +105,67 @@ def _webhook_url() -> str | None:
         if v:
             return v
     return None
+
+
+def _rolling_counter(bot_id: int) -> dict | None:
+    """Return wins/losses/total/win-rate for this bot from the TradeOutcome
+    table. Cached for _COUNTER_TTL_SECONDS to avoid repeat queries on
+    every tick. Returns None if there are no closed trades yet.
+    """
+    now = time.monotonic()
+    cached = _COUNTER_CACHE.get(bot_id)
+    if cached is not None:
+        ts, payload = cached
+        if now - ts < _COUNTER_TTL_SECONDS:
+            return payload
+
+    # Lazy DB import — keeps this module importable from non-app contexts.
+    try:
+        from app.db.database import SessionLocal
+        from app.db.models import TradeOutcome
+        from sqlalchemy import case, func
+    except Exception as exc:
+        logger.debug("rolling counter skipped (db not importable): %s", exc)
+        return None
+
+    db = SessionLocal()
+    try:
+        # Single aggregate query: total, wins, losses, sum_pnl
+        wins_expr = func.sum(case((TradeOutcome.pnl_usd > 0, 1), else_=0))
+        losses_expr = func.sum(case((TradeOutcome.pnl_usd < 0, 1), else_=0))
+        row = (
+            db.query(
+                func.count(TradeOutcome.id),
+                wins_expr,
+                losses_expr,
+                func.sum(TradeOutcome.pnl_usd),
+            )
+            .filter(TradeOutcome.bot_id == bot_id)
+            .one_or_none()
+        )
+        if not row or not row[0]:
+            payload = None
+        else:
+            total = int(row[0] or 0)
+            wins = int(row[1] or 0)
+            losses = int(row[2] or 0)
+            total_pnl = float(row[3] or 0.0)
+            win_rate = (wins / total) if total > 0 else 0.0
+            payload = {
+                "total": total,
+                "wins": wins,
+                "losses": losses,
+                "win_rate": win_rate,
+                "total_pnl": total_pnl,
+            }
+    except Exception as exc:
+        logger.debug("rolling counter query failed: %s", exc)
+        payload = None
+    finally:
+        db.close()
+
+    _COUNTER_CACHE[bot_id] = (now, payload)
+    return payload
 
 
 async def post_decision(
@@ -168,13 +236,28 @@ async def post_decision(
     title = f"{emoji} {decision.replace('_', ' ').upper()} · {symbol}"
     description = reason or "—"
 
+    # Rolling W/L counter — appended to the footer so every post shows the
+    # bot's career record. "12W / 8L · 60.0% · +$23.45" style.
+    counter = _rolling_counter(bot_id)
+    if counter:
+        pnl_sign = "+" if counter["total_pnl"] >= 0 else ""
+        record = (
+            f"{counter['wins']}W / {counter['losses']}L"
+            f" · {counter['win_rate'] * 100:.1f}% WR"
+            f" · {counter['total']} total"
+            f" · {pnl_sign}${counter['total_pnl']:.2f} P&L"
+        )
+        footer_text = f"{record} | Bot #{bot_id} · {timeframe}"
+    else:
+        footer_text = f"no closed trades yet | Bot #{bot_id} · {timeframe}"
+
     embed = {
         "title": title,
         "description": description,
         "color": color,
         "fields": fields,
         "footer": {
-            "text": f"Bot #{bot_id} · {timeframe} · trade-copilot",
+            "text": footer_text,
         },
     }
 
