@@ -142,7 +142,14 @@ class StrategyRunner:
         # Init: ensure StrategyState exists, mark running
         await self._init_state()
 
-        client = TradeLockerClient(env="demo")
+        # The first user provides the data-feed credentials AND determines
+        # which TradeLocker env (demo/live) the client speaks to.
+        feed_user = self._load_first_authed_user()
+        if feed_user is None:
+            logger.warning("runner bot=%s tf=%s: no authenticated user for data feed", self.bot_id, self.timeframe)
+            return
+
+        client = TradeLockerClient(env=feed_user.get("env") or "demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
         threshold = self._current_threshold()
         strategy = LatPFNMomentumStrategy(
@@ -152,13 +159,6 @@ class StrategyRunner:
             threshold=threshold,
         )
         position_monitor = PositionMonitor(self.db_session_factory, client, self.bot_id, self.timeframe)
-
-        # The first user provides the data-feed credentials. (For shared bot
-        # data we just need any authenticated user's session.)
-        feed_user = self._load_first_authed_user()
-        if feed_user is None:
-            logger.warning("runner bot=%s tf=%s: no authenticated user for data feed", self.bot_id, self.timeframe)
-            return
         bar_fetcher = BarFetcher(
             client=client,
             account_id=feed_user["account_id"],
@@ -594,6 +594,7 @@ class StrategyRunner:
                         "account_id": u.tradelocker_account_id,
                         "token": token,
                         "acc_num": u.tradelocker_acc_num or "1",
+                        "env": u.tradelocker_env or "demo",
                     }
             return None
         finally:
@@ -687,7 +688,13 @@ class QuantRunner:
         # Init: ensure StrategyState exists, mark running
         await self._init_state()
 
-        client = TradeLockerClient(env="demo")
+        feed_user = self._load_first_authed_user()
+        if feed_user is None:
+            logger.warning("quant runner bot=%s tf=%s: no authed user", self.bot_id, self.timeframe)
+            self._record_error("no authenticated user for data feed")
+            return
+
+        client = TradeLockerClient(env=feed_user.get("env") or "demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
 
         # Honor whatever threshold is currently in StrategyState — set by
@@ -695,9 +702,10 @@ class QuantRunner:
         # adjuster.
         threshold = self._read_threshold(default=0.5)
         logger.info(
-            "quant runner bot=%s tf=%s using threshold=%.2f",
+            "quant runner bot=%s tf=%s env=%s using threshold=%.2f",
             self.bot_id,
             self.timeframe,
+            feed_user.get("env"),
             threshold,
         )
         strategy = LatPFNQuantStrategy(
@@ -706,12 +714,6 @@ class QuantRunner:
             latpfn_client=latpfn_client,
             threshold=threshold,
         )
-
-        feed_user = self._load_first_authed_user()
-        if feed_user is None:
-            logger.warning("quant runner bot=%s tf=%s: no authed user", self.bot_id, self.timeframe)
-            self._record_error("no authenticated user for data feed")
-            return
         bar_fetcher = BarFetcher(
             client=client,
             account_id=feed_user["account_id"],
@@ -1364,6 +1366,7 @@ class QuantRunner:
                         "account_id": u.tradelocker_account_id,
                         "token": token,
                         "acc_num": u.tradelocker_acc_num or "1",
+                        "env": u.tradelocker_env or "demo",
                     }
             return None
         finally:
