@@ -1,0 +1,76 @@
+name: Deploy Staging
+
+# Auto-deploy the staging Fly app on every push to the `staging` branch,
+# or via manual workflow_dispatch from the Actions tab / `gh` CLI.
+#
+# Manual trigger:
+#   gh workflow run deploy-staging.yml
+#
+# Branch promotion flow:
+#   git push origin <feature-branch>:staging   # deploys to staging
+#   # ...smoke test...
+#   gh pr create --base main --head staging    # promote to prod
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false  # never cancel a deploy mid-flight
+
+jobs:
+  deploy:
+    name: Deploy to Fly (staging)
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to trade-copilot-api-staging
+        run: |
+          flyctl deploy \
+            --config backend/fly.staging.toml \
+            --dockerfile Dockerfile.backend \
+            --strategy immediate \
+            --remote-only \
+            .
+
+      - name: Post-deploy health probe
+        run: |
+          # Give the new machine a moment to come up before probing.
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://trade-copilot-api-staging.fly.dev/health || echo "000")
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "staging /health OK"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::staging /health did not return 200 after 60s"
+          exit 1
+
+      - name: Notify Slack (optional)
+        if: success() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\":rocket: staging deploy complete: \`${GITHUB_SHA::7}\` (https://trade-copilot-api-staging.fly.dev)\"}" \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Notify Discord (optional)
+        if: success() && env.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d "{\"content\":\":rocket: staging deploy complete: \`${GITHUB_SHA::7}\` (https://trade-copilot-api-staging.fly.dev)\"}" \
+            "$DISCORD_WEBHOOK_URL"

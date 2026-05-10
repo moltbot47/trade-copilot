@@ -136,3 +136,40 @@ jobs:
           tags: ${{ matrix.tag }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
+
+  # -------------------------------------------------
+  # Staging smoke test — prod-deploy GUARDRAIL.
+  # On push to main, after lint/test/docker-build all pass, verify the
+  # staging Fly app is responding 200 OK on /health. If staging is down
+  # we fail the workflow so the prod deploy step (manual or future
+  # automated) sees a red main and refuses to ship.
+  #
+  # This job only runs on pushes to main, not on PRs — PR builds
+  # shouldn't be blocked by a staging outage.
+  # -------------------------------------------------
+  staging-smoke-test:
+    name: Staging smoke test (prod gate)
+    runs-on: ubuntu-latest
+    needs: [lint, test, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Probe staging /health
+        run: |
+          set -e
+          url="https://trade-copilot-api-staging.fly.dev/health"
+          echo "Probing $url ..."
+          # Retry a few times to tolerate brief blips. Total budget ~50s.
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/body -w "%{http_code}" --max-time 10 "$url" || echo "000")
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "staging /health OK — prod deploy is gated open"
+              cat /tmp/body || true
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::staging /health did not return 200 — BLOCKING prod deploy"
+          echo "::error::Last response body:"
+          cat /tmp/body || true
+          exit 1
