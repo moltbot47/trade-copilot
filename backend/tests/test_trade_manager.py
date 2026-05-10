@@ -123,7 +123,13 @@ def test_evaluate_emits_scale_in_at_half_R_favorable(session, setup):
         take_profit=81200.0,
     )
     session.commit()
-    # 1R = 400, +0.5R = +200 → price 80200
+    # 1R = 400, +0.5R = +200 → price 80200.
+    # After 2026-05-10 changes: BREAKEVEN_R_THRESHOLD=0.3 fires first
+    # at +0.5R. Apply the BE lock, then re-evaluate to reach scale-in.
+    cmd_be = tm.evaluate(c, current_price=80200.0, forecast_drift=0.6, forecast_confidence=2.0)
+    assert cmd_be is not None and cmd_be.kind == "modify_sl"
+    tm.update_stop(c, cmd_be.new_stop)
+    session.commit()
     cmd = tm.evaluate(c, current_price=80200.0, forecast_drift=0.6, forecast_confidence=2.0)
     assert cmd is not None
     assert cmd.kind == "scale_in"
@@ -148,7 +154,8 @@ def test_evaluate_blocks_scale_in_when_forecast_against(session, setup):
     assert cmd is None or cmd.kind != "scale_in"
 
 
-def test_evaluate_emits_partial_close_at_1R(session, setup):
+def test_evaluate_emits_partial_close_at_R(session, setup):
+    """Partial close (scale-out) now fires at SCALE_OUT_R_THRESHOLD=0.6R."""
     tm = TradeManager(session, setup["bot_id"], setup["user_id"], "1m")
     c = tm.open_cohort(
         instrument="BTCUSD",
@@ -157,11 +164,15 @@ def test_evaluate_emits_partial_close_at_1R(session, setup):
         atr=400.0,
         qty=0.02,
         stop_loss=79600.0,
-        take_profit=81600.0,  # 4R
+        take_profit=81600.0,
     )
     session.commit()
-    # +1R hit — price 80400
-    cmd = tm.evaluate(c, current_price=80400.0, forecast_drift=0.6, forecast_confidence=2.0)
+    # Step 1: +0.6R hit (price 80240) — BE fires first, then re-eval → partial close.
+    cmd_be = tm.evaluate(c, current_price=80240.0, forecast_drift=0.6, forecast_confidence=2.0)
+    assert cmd_be is not None and cmd_be.kind == "modify_sl"
+    tm.update_stop(c, cmd_be.new_stop)
+    session.commit()
+    cmd = tm.evaluate(c, current_price=80240.0, forecast_drift=0.6, forecast_confidence=2.0)
     assert cmd is not None
     assert cmd.kind == "partial_close"
     assert cmd.qty > 0
@@ -298,8 +309,13 @@ def test_short_side_evaluate_partial_close(session, setup):
         take_profit=78400.0,  # 4R below entry
     )
     session.commit()
-    # +1R for short = price drops 400 → 79600
-    cmd = tm.evaluate(c, current_price=79600.0, forecast_drift=-0.6, forecast_confidence=2.0)
+    # +0.6R for short = price drops 240 → 79760.
+    # BE fires first, apply, then re-eval → partial close.
+    cmd_be = tm.evaluate(c, current_price=79760.0, forecast_drift=-0.6, forecast_confidence=2.0)
+    assert cmd_be is not None and cmd_be.kind == "modify_sl"
+    tm.update_stop(c, cmd_be.new_stop)
+    session.commit()
+    cmd = tm.evaluate(c, current_price=79760.0, forecast_drift=-0.6, forecast_confidence=2.0)
     assert cmd is not None
     assert cmd.kind == "partial_close"
 

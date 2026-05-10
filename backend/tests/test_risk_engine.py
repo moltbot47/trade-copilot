@@ -67,19 +67,42 @@ def test_compute_user_lot_negative_base_returns_zero():
 
 
 def test_compute_user_lot_max_risk_caps_lot():
-    """When base × multiplier exceeds max_risk_pct, cap kicks in."""
-    # 5.0 base × 2.0 mult = 10.0 lots wanted; cap at 3.0
+    """When per_lot_risk_usd is provided, cap = balance × risk% / per_lot_risk."""
+    # $10k balance × 3% = $300 max risk; $100/lot risk → cap = 3.0 lots.
     lot = compute_user_lot(
-        base_lot=5.0, aggression_level=10, account_balance=10_000.0, max_risk_pct=3.0
+        base_lot=5.0,
+        aggression_level=10,
+        account_balance=10_000.0,
+        max_risk_pct=3.0,
+        per_lot_risk_usd=100.0,
     )
     assert lot == pytest.approx(3.0, abs=0.01)
 
 
 def test_compute_user_lot_max_risk_caps_lot_low():
+    # $10k × 1% = $100; $100/lot → cap = 1.0 lot.
     lot = compute_user_lot(
-        base_lot=5.0, aggression_level=10, account_balance=10_000.0, max_risk_pct=1.0
+        base_lot=5.0,
+        aggression_level=10,
+        account_balance=10_000.0,
+        max_risk_pct=1.0,
+        per_lot_risk_usd=100.0,
     )
     assert lot == pytest.approx(1.0, abs=0.01)
+
+
+def test_compute_user_lot_no_per_lot_risk_skips_balance_cap():
+    """Without per_lot_risk_usd, the risk-based cap is disabled (logged
+    at DEBUG). Lot is only bounded by aggression × base, step, and max_lot_cap.
+    Regression check: previously 'capped = max_risk_pct' silently treated
+    a percentage as a lot count, which under-capped tiny accounts and
+    over-capped large ones. New behavior: no cap unless caller knows risk.
+    """
+    lot = compute_user_lot(
+        base_lot=5.0, aggression_level=10, account_balance=10_000.0, max_risk_pct=3.0,
+    )
+    # 5.0 × 2.0 mult = 10.0; no balance cap applies → returns 10.0
+    assert lot == pytest.approx(10.0, abs=0.01)
 
 
 def test_compute_user_lot_step_rounding():

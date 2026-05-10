@@ -148,7 +148,17 @@ async def test_full_lifecycle_state_machine(session, setup):
         take_profit=82000.0,
     )
     session.commit()
-    # Step 1: +0.5R → scale-in
+    # Step 0: +0.5R → breakeven lock fires first (>= BREAKEVEN_R_THRESHOLD=0.3).
+    # Apply the SL move; subsequent evaluate at same price will skip BE
+    # (is_better_stop returns False because SL is already at entry).
+    cmd0 = tm.evaluate(c, current_price=80200.0, forecast_drift=0.5, forecast_confidence=2.0)
+    assert cmd0 is not None and cmd0.kind == "modify_sl"
+    assert cmd0.reason == "breakeven_lock"
+    tm.update_stop(c, cmd0.new_stop)
+    session.commit()
+
+    # Step 1: +0.5R after BE → scale-in (SCALE_IN_R=0.5, SCALE_OUT_R=0.6 so
+    # scale-in fires first now).
     cmd1 = tm.evaluate(c, current_price=80200.0, forecast_drift=0.5, forecast_confidence=2.0)
     assert cmd1 is not None and cmd1.kind == "scale_in"
     tm.add_scale_in_leg(c, entry_price=80200.0, qty=cmd1.qty, stop_loss=cmd1.new_stop)
@@ -156,7 +166,16 @@ async def test_full_lifecycle_state_machine(session, setup):
     assert len(c.legs) == 2
     assert c.weighted_avg_entry == pytest.approx(80100.0)
 
-    # Step 2: +1R from new avg (80100 + 400 = 80500) → partial close
+    # Step 2a: at +1R from new weighted_avg_entry (80100), BE re-fires
+    # because cost basis moved up — lock SL at new break-even before
+    # the partial close can fire.
+    cmd_be2 = tm.evaluate(c, current_price=80500.0, forecast_drift=0.5, forecast_confidence=2.0)
+    assert cmd_be2 is not None and cmd_be2.kind == "modify_sl"
+    assert cmd_be2.reason == "breakeven_lock"
+    tm.update_stop(c, cmd_be2.new_stop)
+    session.commit()
+
+    # Step 2b: +1R from new avg → partial close
     cmd2 = tm.evaluate(c, current_price=80500.0, forecast_drift=0.5, forecast_confidence=2.0)
     assert cmd2 is not None and cmd2.kind == "partial_close"
     tm.record_partial_close(c, qty_closed=cmd2.qty, close_price=80500.0)
@@ -190,6 +209,12 @@ async def test_no_double_scale_in(session, setup):
         stop_loss=79600.0, take_profit=82000.0,
     )
     session.commit()
+    # First evaluate at +0.5R: breakeven lock fires (>= 0.3R). Apply it.
+    cmd_be = tm.evaluate(c, current_price=80200.0, forecast_drift=0.5, forecast_confidence=2.0)
+    assert cmd_be.kind == "modify_sl"
+    tm.update_stop(c, cmd_be.new_stop)
+    session.commit()
+    # Second evaluate at +0.5R: BE done, scale-in fires.
     cmd = tm.evaluate(c, current_price=80200.0, forecast_drift=0.5, forecast_confidence=2.0)
     assert cmd.kind == "scale_in"
     tm.add_scale_in_leg(c, entry_price=80200.0, qty=cmd.qty, stop_loss=cmd.new_stop)

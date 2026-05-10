@@ -174,3 +174,99 @@ def test_current_threshold_default_when_no_state(db_session, seed_bots):
     )
     # No StrategyState row → default 1.5
     assert runner._current_threshold() == pytest.approx(1.5)
+
+
+# ============================================================================
+# Kill-switch guardrail tests (added 2026-05-10 after CRITICAL #1 regression).
+# These exercise _check_live_guardrails directly so the camelCase key contract
+# with TradeLockerClient.get_account_state can't silently break again.
+# ============================================================================
+
+from app.strategies.runner import QuantRunner
+from app.db.models import User
+
+
+def _make_quant_runner(db_session, seed_bots):
+    factory = _session_factory(db_session)
+    return QuantRunner(
+        db_session_factory=factory,
+        bot_id=seed_bots[2].id,
+        timeframe="1m",
+        symbols=["BTCUSD"],
+        user_emails=["x@example.com"],
+    )
+
+
+def _make_user(env="live", kill_pct=20.0):
+    u = User(email="kt@example.com", hashed_password="x")
+    u.tradelocker_env = env
+    u.daily_kill_switch_pct = kill_pct
+    return u
+
+
+def test_kill_switch_passes_when_env_is_demo(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(env="demo", kill_pct=20.0)
+    state = {"balance": 100.0, "todayNet": -50.0}  # would otherwise breach
+    allowed, reason = runner._check_live_guardrails(user, state)
+    assert allowed is True
+    assert reason is None
+
+
+def test_kill_switch_passes_when_kill_pct_is_zero(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(kill_pct=0)
+    state = {"balance": 100.0, "todayNet": -99.0}
+    allowed, reason = runner._check_live_guardrails(user, state)
+    assert allowed is True
+
+
+def test_kill_switch_uses_camelcase_todayNet_key(db_session, seed_bots):
+    """Regression test for CRITICAL bug 2026-05-10: runner previously read
+    'today_net' (snake) but TradeLockerClient returns 'todayNet' (camel).
+    """
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(kill_pct=20.0)
+    state = {"balance": 100.0, "todayNet": -25.0}  # 25% loss > 20% cap
+    allowed, reason = runner._check_live_guardrails(user, state)
+    assert allowed is False
+    assert "daily_kill_switch_hit" in (reason or "")
+
+
+def test_kill_switch_does_NOT_match_snake_key(db_session, seed_bots):
+    """If state has snake_case key only (typo regression), kill switch
+    should still fail-soft to True — but should NOT fire on imaginary data."""
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(kill_pct=20.0)
+    state = {"balance": 100.0, "today_net": -25.0}  # wrong key
+    allowed, _ = runner._check_live_guardrails(user, state)
+    # Fail-soft: missing key → allow (other guardrails still apply)
+    assert allowed is True
+
+
+def test_kill_switch_fires_at_exact_threshold(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(kill_pct=10.0)
+    state = {"balance": 1000.0, "todayNet": -100.0}  # exactly 10%
+    allowed, reason = runner._check_live_guardrails(user, state)
+    assert allowed is False
+    assert "10.00%" in (reason or "") or "10.0%" in (reason or "")
+
+
+def test_kill_switch_allows_when_profitable(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(kill_pct=20.0)
+    state = {"balance": 1000.0, "todayNet": 50.0}  # profit
+    allowed, reason = runner._check_live_guardrails(user, state)
+    assert allowed is True
+
+
+def test_kill_switch_fail_soft_on_empty_state(db_session, seed_bots):
+    """Broker hiccup: account_state is None → allow rather than halt
+    (lot cap + position cap still bound risk)."""
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(kill_pct=20.0)
+    allowed, _ = runner._check_live_guardrails(user, None)
+    assert allowed is True
+    allowed, _ = runner._check_live_guardrails(user, {})
+    assert allowed is True

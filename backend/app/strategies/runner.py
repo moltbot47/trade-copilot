@@ -698,15 +698,27 @@ class QuantRunner:
         # Pre-emptively refresh the feed user's token at runner startup.
         # If the bot has been idle for >24h, the stored token is almost
         # certainly stale and the first tick would 401 on every call.
-        try:
-            from app.core.tradelocker_token_refresh import refresh_user_token
+        from app.core.tradelocker_token_refresh import refresh_user_token
 
+        try:
             new_token = await refresh_user_token(feed_user["user_id"])
             if new_token:
                 feed_user["token"] = new_token
                 logger.info("quant runner: refreshed feed user %s token at startup", feed_user["user_id"])
         except Exception as exc:
             logger.warning("startup token refresh failed: %s", exc)
+
+        # Build a token-refresh callback so the BarFetcher can self-heal
+        # when a 401 hits mid-run (e.g. token rotated to a new value by
+        # the periodic refresh task). Returns None on failure.
+        feed_user_id = feed_user["user_id"]
+
+        async def _bar_token_refresh() -> str | None:
+            try:
+                return await refresh_user_token(feed_user_id)
+            except Exception as exc:
+                logger.warning("bar-fetcher token refresh failed: %s", exc)
+                return None
 
         client = TradeLockerClient(env=feed_user.get("env") or "demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
@@ -733,6 +745,7 @@ class QuantRunner:
             account_id=feed_user["account_id"],
             token=feed_user["token"],
             acc_num=feed_user["acc_num"],
+            token_refresh_cb=_bar_token_refresh,
         )
 
         sleep_seconds = tf_seconds(self.timeframe)
@@ -864,8 +877,14 @@ class QuantRunner:
         # shouldn't shut the bot off.
         if not account_state:
             return True, None
+        # TradeLockerClient.get_account_state returns camelCase keys directly
+        # from STATE_COL. The HTTP-API layer (/api/tradelocker/account) maps
+        # these to snake_case, but the runner calls the client directly so we
+        # MUST use the original keys. Bug 2026-05-10: previously checked
+        # account_state.get("today_net") which is always None, silently
+        # disabling the kill switch.
         balance_raw = account_state.get("balance")
-        today_raw = account_state.get("today_net")
+        today_raw = account_state.get("todayNet")
         if balance_raw is None or today_raw is None:
             return True, None
         balance = float(balance_raw)
@@ -1190,18 +1209,52 @@ class QuantRunner:
         order_id = str(order.get("order_id") or "")
         logger.info("place_order response: %s", order)
 
-        # Find the position id
+        # Find the position id. Robust matching priority:
+        #   1. orderId match (most precise — links position back to order we sent)
+        #   2. strategyId match (some TL deployments echo this)
+        #   3. Most recent position on this symbol+side with no prior cohort
+        #      tracking it (newest first via openDate).
+        # Bug 2026-05-10: previous code took "last position with matching
+        # side", which on a hedging account with multiple same-direction
+        # positions would link to a pre-existing trade.
         positions = await client.get_positions(
             user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
         )
-        # Newest position with matching symbol/side
+
+        # Resolve target tradable_id once
+        target_tid = None
+        try:
+            target_tid, _ = await client.resolve_symbol(
+                user.tradelocker_account_id, token, user.tradelocker_acc_num or "1", sig.symbol,
+            )
+        except Exception:
+            pass
+
         pos_id = None
         pos_obj: dict | None = None
-        for p in reversed(positions):
-            if str(p.get("side")).lower() == sig.side.lower():
+        # Priority 1+2: match by orderId or strategyId
+        for p in positions:
+            p_order = str(p.get("orderId") or p.get("order_id") or "")
+            p_strat = str(p.get("strategyId") or p.get("strategy_id") or "")
+            if order_id and (p_order == order_id or p_strat == order_id):
                 pos_id = str(p.get("id"))
                 pos_obj = p
                 break
+        # Priority 3: newest matching symbol/side, sorted by openDate desc
+        if pos_id is None:
+            same_symbol_side = [
+                p for p in positions
+                if str(p.get("side", "")).lower() == sig.side.lower()
+                and (target_tid is None or int(p.get("tradableInstrumentId") or 0) == target_tid)
+            ]
+            # Sort by openDate desc if available; else assume list is chronological
+            try:
+                same_symbol_side.sort(key=lambda p: p.get("openDate") or 0, reverse=True)
+            except Exception:
+                pass
+            if same_symbol_side:
+                pos_obj = same_symbol_side[0]
+                pos_id = str(pos_obj.get("id"))
 
         # Verify SL/TP made it onto the broker. If not, repair via modify_position.
         # Some TL deployments silently drop sl/tp on the order create — we send
@@ -1332,11 +1385,31 @@ class QuantRunner:
                 logger.warning("entry-leg SL move failed: %s", exc)
 
         elif cmd.kind == "partial_close":
+            # Pick the first OPEN leg with a valid broker position ID.
+            # legs[0] is the original entry but may have been already closed
+            # or never linked to a broker position (e.g. order placed but
+            # lookup race). Falling back to any open leg with a position ID.
+            close_leg = next(
+                (
+                    l
+                    for l in cohort.legs
+                    if l.is_open
+                    and l.role in ("entry", "scale_in")
+                    and l.tradelocker_position_id
+                ),
+                None,
+            )
+            if close_leg is None:
+                logger.warning(
+                    "partial_close skipped for cohort %s: no open leg with broker position id",
+                    cohort.id,
+                )
+                return
             close_resp = await client.partial_close(
                 account_id=user.tradelocker_account_id,
                 token=token,
                 acc_num=user.tradelocker_acc_num or "1",
-                position_id=cohort.legs[0].tradelocker_position_id or "",
+                position_id=close_leg.tradelocker_position_id,
                 symbol=cohort.instrument,
                 original_side=cohort.side,
                 qty=cmd.qty,

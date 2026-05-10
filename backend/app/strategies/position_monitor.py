@@ -189,7 +189,20 @@ class PositionMonitor:
 
         qty = float(ex.executed_lot_size or 0.0)
         pnl_per_unit = exit_price - entry if side == "buy" else entry - exit_price
-        pnl_usd = pnl_per_unit * qty * 100_000.0  # rough FX standard-lot scaler; instrument-specific later
+        # Instrument-specific lot scaling. Bug 2026-05-10: a flat 100,000x
+        # multiplier was applied to EVERY instrument including crypto, where
+        # 1 lot = 1 BTC/ETH (not 100k base units). On a 0.01 BTC lot with a
+        # $100 move that produced $100,000 reported P&L instead of $1.
+        sym = (signal.instrument or "").upper()
+        if any(c in sym for c in ("BTC", "ETH", "LTC", "DOGE", "SOL", "XRP", "BNB", "ADA")):
+            lot_multiplier = 1.0       # crypto: 1 lot = 1 base unit
+        elif "XAU" in sym or "XAG" in sym:
+            lot_multiplier = 100.0     # metals: 1 lot = 100 oz
+        elif "JPY" in sym:
+            lot_multiplier = 1_000.0   # JPY pairs: 1 pip = 0.01, 1 lot = 100k but pnl scales differently
+        else:
+            lot_multiplier = 100_000.0 # FX majors: 1 lot = 100k base
+        pnl_usd = pnl_per_unit * qty * lot_multiplier
 
         # R-multiple = pnl_per_unit / risked_per_unit
         risked = abs(entry - float(signal.stop_loss)) if signal.stop_loss else 0.0

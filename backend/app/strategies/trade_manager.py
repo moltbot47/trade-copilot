@@ -74,8 +74,11 @@ def _ws_publish_sl_moved(
 # earlier risk reduction. Originally tuned for swing trades on $1k+ accounts.
 BREAKEVEN_R_THRESHOLD = 0.3        # +0.3R favorable → move SL to break-even
 SCALE_IN_R_THRESHOLD = 0.5         # +0.5R favorable → add a leg (if forecast still on)
-SCALE_OUT_R_THRESHOLD = 0.5        # +0.5R → close 50% (was 1.0R; on $21 account
-                                   #         spread tax dominates if we wait for 1R)
+SCALE_OUT_R_THRESHOLD = 0.6        # +0.6R → close 50%. INVARIANT: must be > SCALE_IN
+                                   # so scale-in fires first at lower R. Otherwise
+                                   # the cohort goes straight to partial without
+                                   # ever scaling up. 2026-05-10: was 0.5 — both
+                                   # firing at same R was a fragile mutex.
 TRAIL_ATR_MULTIPLE = 1.0           # trail SL by 1×ATR
 TRAIL_LOCK_MIN_R = 0.3             # once trailed past entry, lock min +0.3R
 DRAWDOWN_ATR_LIMIT = 1.5           # tightened: cohort avg DD > 1.5×ATR → exit

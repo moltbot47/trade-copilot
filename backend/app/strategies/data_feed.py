@@ -45,7 +45,17 @@ def _tf_seconds(tf: str) -> int:
 
 
 class BarFetcher:
-    """Fetches OHLCV bars from TradeLocker and caches them per symbol+tf."""
+    """Fetches OHLCV bars from TradeLocker and caches them per symbol+tf.
+
+    Token lifecycle: the constructor takes the initial token but the field
+    is mutable. Set ``token_refresh_cb`` to a coroutine returning a fresh
+    token; on 401 the fetcher calls the callback once and retries before
+    falling back to synthetic. This prevents the silent-go-dark failure
+    where a 24h+ session expires mid-run.
+
+    Cache: bounded to ``cache_maxsize`` entries with LRU eviction so a
+    long-lived runner can't OOM on accumulated (symbol, timeframe) pairs.
+    """
 
     def __init__(
         self,
@@ -53,15 +63,47 @@ class BarFetcher:
         account_id: str,
         token: str,
         acc_num: str,
+        token_refresh_cb=None,
+        cache_maxsize: int = 32,
     ) -> None:
+        from collections import OrderedDict
+
         self.client = client
         self.account_id = account_id
         self.token = token
         self.acc_num = acc_num
-        # cache key: (symbol, timeframe) → DataFrame
-        self._cache: dict[tuple[str, str], pd.DataFrame] = {}
+        self.token_refresh_cb = token_refresh_cb  # Optional[Callable[[], Awaitable[str|None]]]
+        # cache key: (symbol, timeframe) → DataFrame. OrderedDict so we can
+        # evict in FIFO/LRU order if size exceeds cache_maxsize.
+        self._cache: "OrderedDict[tuple[str, str], pd.DataFrame]" = OrderedDict()
+        self._cache_maxsize = max(1, cache_maxsize)
         # symbol → INFO route id (separate from TRADE route, used for history)
         self._info_route_cache: dict[str, int] = {}
+
+    def _cache_put(self, key: tuple[str, str], df: pd.DataFrame) -> None:
+        """LRU put: re-insert moves to MRU position; evict the LRU when full."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = df
+        while len(self._cache) > self._cache_maxsize:
+            self._cache.popitem(last=False)  # pop LRU
+
+    async def _try_refresh_token(self) -> bool:
+        """Invoke the refresh callback (if any) and update self.token.
+        Returns True if token rotated, False otherwise.
+        """
+        if self.token_refresh_cb is None:
+            return False
+        try:
+            new = await self.token_refresh_cb()
+        except Exception as exc:
+            logger.warning("token refresh callback raised: %s", exc)
+            return False
+        if not new or new == self.token:
+            return False
+        self.token = new
+        logger.info("BarFetcher token rotated via refresh callback")
+        return True
 
     async def _resolve_info_route(self, symbol: str) -> Optional[int]:
         """Find the INFO-type route for a symbol — different from TRADE route.
@@ -116,10 +158,32 @@ class BarFetcher:
                 self.account_id, self.token, self.acc_num, symbol
             )
         except TradeLockerError as exc:
-            logger.warning("resolve_symbol failed for %s: %s — using synthetic", symbol, exc)
-            df = self._synthetic(symbol, timeframe, count)
-            df.attrs["synthetic"] = True
-            return df
+            # If this looks like an auth failure, try a one-shot token refresh
+            # before giving up. Prevents the silent-go-dark when a 24h session
+            # expires mid-run (the periodic refresh task updates the DB but
+            # not the in-memory BarFetcher token).
+            if "401" in str(exc) or "unauthorized" in str(exc).lower():
+                refreshed = await self._try_refresh_token()
+                if refreshed:
+                    try:
+                        tradable_id, _trade_route_id = await self.client.resolve_symbol(
+                            self.account_id, self.token, self.acc_num, symbol
+                        )
+                    except TradeLockerError as exc2:
+                        logger.warning("resolve_symbol still failed after refresh for %s: %s — synthetic", symbol, exc2)
+                        df = self._synthetic(symbol, timeframe, count)
+                        df.attrs["synthetic"] = True
+                        return df
+                else:
+                    logger.warning("resolve_symbol 401 for %s, no refresh available — synthetic", symbol)
+                    df = self._synthetic(symbol, timeframe, count)
+                    df.attrs["synthetic"] = True
+                    return df
+            else:
+                logger.warning("resolve_symbol failed for %s: %s — using synthetic", symbol, exc)
+                df = self._synthetic(symbol, timeframe, count)
+                df.attrs["synthetic"] = True
+                return df
 
         # History needs the INFO route (different from TRADE route).
         info_route_id = await self._resolve_info_route(symbol)
@@ -144,7 +208,7 @@ class BarFetcher:
                 merged = pd.concat([cached, df]) if cached is not None else df
                 merged = merged[~merged.index.duplicated(keep="last")].sort_index()
                 merged = merged.tail(count)
-                self._cache[key] = merged
+                self._cache_put(key, merged)
                 return merged
 
         # All variants failed — degrade gracefully
