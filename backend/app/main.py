@@ -17,6 +17,7 @@ from app.api import (
     bots,
     calculator,
     dashboard,
+    mfa,
     subscriptions,
     tradelocker,
     users,
@@ -122,6 +123,8 @@ def _apply_lightweight_migrations() -> None:
         ("users", "max_concurrent_positions", "INTEGER DEFAULT NULL"),
         ("users", "exhaustion_filter_enabled", "BOOLEAN DEFAULT 0"),
         ("users", "bot_paused", "BOOLEAN DEFAULT 0"),
+        ("users", "mfa_secret", "TEXT DEFAULT NULL"),
+        ("users", "mfa_enabled", "BOOLEAN DEFAULT 0"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
@@ -321,6 +324,7 @@ app.include_router(metrics_api.latency_router, prefix="/api")  # /api/metrics/la
 
 # Mount routers under /api
 app.include_router(auth.router, prefix="/api")
+app.include_router(mfa.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(bots.router, prefix="/api")

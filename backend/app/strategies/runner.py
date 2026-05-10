@@ -1195,9 +1195,17 @@ class QuantRunner:
         if not account_id:
             raise ValueError(f"user {user.id} has no tradelocker_account_id")
         atr = float(sig.extra.get("atr", 0.0))
+        # Idempotency key: deterministic across retries within the same minute
+        # but unique per (user, symbol, side, minute). If the runner retries
+        # because of a transient broker failure, the same key prevents a
+        # second position from opening. Bucket size 60s aligns with the 1m
+        # bar cadence — within a single bar we cannot reasonably fire twice.
+        import time as _time
+        _bucket = int(_time.time() // 60)
+        client_order_id = f"tc-entry-{self.bot_id}-{user.id}-{sig.symbol}-{sig.side}-{_bucket}"
         logger.info(
-            "place_order request: %s %s qty=%.4f entry=%.2f SL=%.2f TP=%.2f",
-            sig.side, sig.symbol, sig.qty, sig.entry_price, sig.stop_loss or 0.0, sig.take_profit or 0.0,
+            "place_order request: %s %s qty=%.4f entry=%.2f SL=%.2f TP=%.2f coid=%s",
+            sig.side, sig.symbol, sig.qty, sig.entry_price, sig.stop_loss or 0.0, sig.take_profit or 0.0, client_order_id,
         )
         order = await client.place_order(
             account_id=account_id,
@@ -1207,6 +1215,7 @@ class QuantRunner:
             side=sig.side,
             qty=sig.qty,
             sl=sig.stop_loss,
+            client_order_id=client_order_id,
             tp=sig.take_profit,
         )
         order_id = str(order.get("order_id") or "")
@@ -1351,10 +1360,18 @@ class QuantRunner:
         if cmd.kind == "scale_in":
             if cmd.new_stop is None:
                 raise ValueError("scale_in command missing new_stop")
+            # Idempotency key for scale-in legs: bucketed by minute, includes
+            # leg count so a 2nd scale-in within the same minute gets its own
+            # key (rare in practice, but the math should be sound).
+            import time as _time
+            _scale_bucket = int(_time.time() // 60)
+            _leg_count = len([l for l in cohort.legs if l.is_open])
+            scale_coid = f"tc-scalein-{cohort.id}-{_leg_count}-{_scale_bucket}"
             order = await client.place_order(
                 account_id=account_id,
                 token=token,
                 acc_num=user.tradelocker_acc_num or "1",
+                client_order_id=scale_coid,
                 symbol=cohort.instrument,
                 side=cohort.side,
                 qty=cmd.qty,

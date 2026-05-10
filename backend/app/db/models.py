@@ -84,6 +84,14 @@ class User(Base):
     # every (bot, timeframe) pair.
     bot_paused: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # TOTP-based MFA. mfa_secret is the base32-encoded shared secret (stored
+    # encrypted via the same Fernet key as the TL token); mfa_enabled gates
+    # whether login requires a code. Setting up MFA writes mfa_secret first,
+    # then verification flips mfa_enabled=True. Disabling MFA requires a
+    # current valid TOTP code.
+    mfa_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["Execution"]] = relationship(back_populates="user")
 

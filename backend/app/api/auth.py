@@ -25,11 +25,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class LoginRequest(BaseModel):
     email: EmailStr
+    mfa_code: str | None = None
 
 
 class LoginResponse(BaseModel):
     email: EmailStr
     exp: int  # unix seconds
+
+
+class MfaRequiredResponse(BaseModel):
+    """Returned with HTTP 401 when an mfa_enabled user logs in without a code."""
+    detail: str = "mfa_required"
+    email: EmailStr
 
 
 class MeResponse(BaseModel):
@@ -74,8 +81,29 @@ def login(
     First-time emails auto-create a User row (MVP: no password barrier).
     Rate-limited to 10/min per IP to deter enumeration.
     """
+    from fastapi import HTTPException, status as http_status
+
     settings = get_settings()
     user = get_or_create_user(db, str(payload.email))
+
+    # MFA gate — if this user has enabled TOTP, the email is not enough.
+    # We reject with a 401 + a distinguishable detail string so the frontend
+    # can prompt for the code without leaking whether the email exists.
+    if user.mfa_enabled:
+        from app.auth.mfa import decrypt_secret, verify_code
+
+        if not payload.mfa_code:
+            raise HTTPException(
+                status_code=http_status.HTTP_401_UNAUTHORIZED,
+                detail="mfa_required",
+            )
+        secret = decrypt_secret(user.mfa_secret)
+        if not secret or not verify_code(secret, payload.mfa_code):
+            raise HTTPException(
+                status_code=http_status.HTTP_401_UNAUTHORIZED,
+                detail="mfa_invalid_code",
+            )
+
     token, expires_at = issue_session_token(user.email)
     max_age = settings.SESSION_TTL_DAYS * 24 * 60 * 60
     _set_session_cookie(response, token, max_age)

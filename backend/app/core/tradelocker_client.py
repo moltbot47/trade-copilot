@@ -83,6 +83,12 @@ class TradeLockerError(Exception):
 
 
 class TradeLockerClient:
+    # Class-level idempotency cache shared across instances. TradeLocker
+    # tokens rotate but client_order_ids should still dedup if the same key
+    # comes through a new client object during a retry.
+    _IDEMPOTENCY_TTL_SECONDS = 60.0
+    _idempotency_cache: dict[str, dict[str, Any]] = {}
+
     def __init__(self, env: str = "demo", timeout: float = 15.0) -> None:
         s = get_settings()
         self.base_url = (
@@ -92,6 +98,28 @@ class TradeLockerClient:
         self.timeout = timeout
         # symbol → (tradableInstrumentId, routeId) cache, per-account
         self._instrument_cache: dict[str, dict[str, dict[str, int]]] = {}
+
+    def _idempotency_cache_hit(self, key: str) -> bool:
+        import time as _time
+
+        rec = self._idempotency_cache.get(key)
+        if not rec:
+            return False
+        if _time.monotonic() - rec["ts"] > self._IDEMPOTENCY_TTL_SECONDS:
+            self._idempotency_cache.pop(key, None)
+            return False
+        return True
+
+    def _idempotency_cache_put(self, key: str, response: dict[str, Any]) -> None:
+        import time as _time
+
+        self._idempotency_cache[key] = {"ts": _time.monotonic(), "response": response}
+        # Opportunistic eviction: keep cache bounded
+        if len(self._idempotency_cache) > 256:
+            cutoff = _time.monotonic() - self._IDEMPOTENCY_TTL_SECONDS
+            for k, v in list(self._idempotency_cache.items()):
+                if v["ts"] < cutoff:
+                    self._idempotency_cache.pop(k, None)
 
     def _headers(self, token: Optional[str] = None, acc_num: Optional[str] = None) -> dict[str, str]:
         h: dict[str, str] = {"Accept": "application/json"}
@@ -109,9 +137,12 @@ class TradeLockerClient:
         token: Optional[str] = None,
         acc_num: Optional[str] = None,
         json: Optional[dict] = None,
+        extra_headers: Optional[dict[str, str]] = None,
     ) -> Any:
         url = f"{self.base_url}{path}"
         headers = self._headers(token, acc_num)
+        if extra_headers:
+            headers.update(extra_headers)
         async with httpx.AsyncClient(timeout=self.timeout) as c:
             try:
                 r = await c.request(method, url, headers=headers, json=json)
@@ -227,12 +258,28 @@ class TradeLockerClient:
         tp: Optional[float] = None,
         order_type: str = "market",
         validity: str = "IOC",
+        client_order_id: Optional[str] = None,
     ) -> dict:
         """POST /trade/accounts/{id}/orders.
 
         Resolves symbol → (tradableInstrumentId, routeId) and submits the order.
-        Returns: {orderId: str, raw: full_response}
+        If ``client_order_id`` is provided, it's sent as ``clientOrderId`` in
+        the request body and also via the ``X-Idempotency-Key`` header. The
+        client also short-circuits duplicate sends within the in-process
+        dedup window (60s) — if the same key was just placed, returns the
+        cached response without hitting the broker. Prevents the same signal
+        from creating 2 positions during retry storms.
+
+        Returns: {orderId: str, raw: full_response, idempotency_key: str|None,
+                  duplicate: bool (true if a deduped retry)}
         """
+        # In-process dedup: any retry with the same key within 60s returns
+        # the cached response without re-submitting. Broker may also dedup
+        # if it honors X-Idempotency-Key, but we don't depend on it.
+        if client_order_id and self._idempotency_cache_hit(client_order_id):
+            cached = self._idempotency_cache[client_order_id]["response"]
+            return {**cached, "duplicate": True}
+
         tradable_id, route_id = await self.resolve_symbol(account_id, token, acc_num, symbol)
         body: dict[str, Any] = {
             "tradableInstrumentId": tradable_id,
@@ -246,22 +293,32 @@ class TradeLockerClient:
             body["stopLoss"] = sl
         if tp is not None:
             body["takeProfit"] = tp
+        if client_order_id:
+            body["clientOrderId"] = client_order_id
+
+        extra_headers = {"X-Idempotency-Key": client_order_id} if client_order_id else None
         raw = await self._request(
             "POST",
             f"/trade/accounts/{account_id}/orders",
             token=token,
             acc_num=acc_num,
             json=body,
+            extra_headers=extra_headers,
         )
         if raw.get("s") != "ok":
             raise TradeLockerError(
                 f"order rejected: {raw.get('errmsg') or raw.get('message') or raw}"
             )
-        return {
+        response = {
             "order_id": raw["d"]["orderId"],
             "request_body": body,
             "raw": raw,
+            "idempotency_key": client_order_id,
+            "duplicate": False,
         }
+        if client_order_id:
+            self._idempotency_cache_put(client_order_id, response)
+        return response
 
     # ---------- POSITIONS ----------
     async def get_positions(self, account_id: str, token: str, acc_num: str) -> list[dict]:
