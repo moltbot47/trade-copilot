@@ -165,6 +165,25 @@ def _apply_lightweight_migrations() -> None:
             except Exception as exc:  # never crash on migration
                 logger.warning("migration %s.%s failed: %s", tbl, col, exc)
 
+        # One-time data fixes (idempotent, run every boot but no-op if already
+        # at desired state). Owner-requested override on 2026-05-10:
+        # bump max_concurrent_positions from 1 → 3 for the live experiment
+        # account. They've explicitly accepted the additional risk.
+        try:
+            res = conn.execute(
+                text(
+                    "UPDATE users SET max_concurrent_positions = :cap "
+                    "WHERE email = :email AND (max_concurrent_positions IS NULL OR max_concurrent_positions < :cap)"
+                ),
+                {"cap": 3, "email": "butler135@gmail.com"},
+            )
+            if res.rowcount:
+                logger.info(
+                    "migration: bumped max_concurrent_positions to 3 for butler135@gmail.com"
+                )
+        except Exception as exc:
+            logger.warning("max_concurrent_positions bump failed: %s", exc)
+
 
 async def _periodic_token_refresh_task() -> None:
     """Background task: refresh all TradeLocker tokens every 6 hours.

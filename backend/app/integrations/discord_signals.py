@@ -37,9 +37,15 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DISCORD_WEBHOOK_ENV = "DISCORD_SIGNALS_WEBHOOK_URL"
+# Two env-var names supported (DISCORD_WEBHOOK_URL is the older one some
+# deployments are using; DISCORD_SIGNALS_WEBHOOK_URL is the newer canonical
+# name). Either works — the publisher checks both.
+_DISCORD_WEBHOOK_ENV_NAMES = ("DISCORD_SIGNALS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
+DISCORD_WEBHOOK_ENV = _DISCORD_WEBHOOK_ENV_NAMES[0]  # canonical (kept for backwards-compat imports)
 
-# Decision allowlist — only these post to Discord.
+# Decision allowlist — these post to Discord. Includes skip_below_threshold
+# so every scan with a confidence score lands in the channel — useful for
+# watching the bot "think" in real time even when it doesn't fire.
 HIGH_SIGNAL_DECISIONS = frozenset(
     {
         "entry_buy",
@@ -49,6 +55,9 @@ HIGH_SIGNAL_DECISIONS = frozenset(
         "hard_exit",
         "skip_kill_switch",
         "skip_exhaustion_filter",
+        "skip_below_threshold",   # confidence-bearing scan
+        "skip_existing_position", # confidence-bearing scan blocked by exposure
+        "skip_position_cap",      # confidence-bearing scan blocked by cap
     }
 )
 
@@ -71,11 +80,24 @@ _EMOJIS = {
     "hard_exit": "🚪",
     "skip_kill_switch": "🛑",
     "skip_exhaustion_filter": "⏸️",
+    "skip_below_threshold": "🔍",
+    "skip_existing_position": "🔒",
+    "skip_position_cap": "🧯",
 }
+
+# Skip-decisions get a more muted blue-grey color since they are scans, not trades.
+_COLORS["skip_below_threshold"] = 0x546E7A
+_COLORS["skip_existing_position"] = 0x546E7A
+_COLORS["skip_position_cap"] = 0x546E7A
 
 
 def _webhook_url() -> str | None:
-    return os.environ.get(DISCORD_WEBHOOK_ENV) or None
+    """Return the first non-empty webhook URL from the supported env names."""
+    for name in _DISCORD_WEBHOOK_ENV_NAMES:
+        v = os.environ.get(name)
+        if v:
+            return v
+    return None
 
 
 async def post_decision(
