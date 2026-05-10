@@ -48,6 +48,80 @@ def compute_rsi(closes: np.ndarray, period: int = 14) -> float:
     return 100.0 - (100.0 / (1.0 + rs))
 
 
+def passes_no_chase(
+    bars: pd.DataFrame,
+    side: str,
+    rsi_period: int = 14,
+    rsi_chase_high: float = 70.0,
+    rsi_chase_low: float = 30.0,
+    range_lookback: int = 10,
+    range_chase_high: float = 0.85,
+    range_chase_low: float = 0.15,
+) -> tuple[bool, dict]:
+    """No-chase filter — block obvious top-chasing or bottom-chasing entries.
+
+    Allows momentum trades at any "normal" position in the recent range, but
+    refuses to fire when the price is already at a local extreme.
+
+    BUY blocked if:
+      - RSI > rsi_chase_high (already overbought = chasing the top)
+      - OR price > 85% of last `range_lookback` bars' range (fresh high zone)
+
+    SELL blocked if:
+      - RSI < rsi_chase_low (already oversold)
+      - OR price < 15% of last `range_lookback` bars' range (fresh low zone)
+
+    Returns (allowed, diagnostic_dict).
+    """
+    if bars is None or len(bars) < max(rsi_period + 2, range_lookback + 1):
+        return False, {"reason": "insufficient_bars"}
+
+    closes = bars["close"].to_numpy(dtype=float)
+    highs = bars["high"].to_numpy(dtype=float)
+    lows = bars["low"].to_numpy(dtype=float)
+
+    rsi = compute_rsi(closes, rsi_period)
+    if not np.isfinite(rsi):
+        return False, {"reason": "rsi_nan"}
+
+    # Recent range position (0 = at the low, 1 = at the high)
+    recent_high = float(np.max(highs[-range_lookback:]))
+    recent_low = float(np.min(lows[-range_lookback:]))
+    span = recent_high - recent_low
+    current = float(closes[-1])
+    range_pos = (current - recent_low) / span if span > 0 else 0.5
+
+    diag = {
+        "rsi": round(rsi, 2),
+        "range_pos": round(range_pos, 3),
+        "recent_high": round(recent_high, 2),
+        "recent_low": round(recent_low, 2),
+    }
+
+    if side == "buy":
+        if rsi > rsi_chase_high:
+            diag["reason"] = f"chasing_top_rsi={rsi:.1f}>{rsi_chase_high}"
+            return False, diag
+        if range_pos > range_chase_high:
+            diag["reason"] = f"chasing_top_range={range_pos:.2f}>{range_chase_high}"
+            return False, diag
+        diag["reason"] = "ok_not_chasing_top"
+        return True, diag
+
+    if side == "sell":
+        if rsi < rsi_chase_low:
+            diag["reason"] = f"chasing_bottom_rsi={rsi:.1f}<{rsi_chase_low}"
+            return False, diag
+        if range_pos < range_chase_low:
+            diag["reason"] = f"chasing_bottom_range={range_pos:.2f}<{range_chase_low}"
+            return False, diag
+        diag["reason"] = "ok_not_chasing_bottom"
+        return True, diag
+
+    diag["reason"] = "unknown_side"
+    return False, diag
+
+
 def passes_exhaustion(
     bars: pd.DataFrame,
     side: str,

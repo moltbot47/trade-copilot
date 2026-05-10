@@ -33,7 +33,7 @@ from app.db.models import (
 )
 from app.strategies.base import StrategySignal
 from app.strategies.data_feed import BarFetcher
-from app.strategies.exhaustion_filter import passes_exhaustion
+from app.strategies.exhaustion_filter import passes_exhaustion, passes_no_chase
 from app.strategies.feedback import FeedbackAdjuster
 from app.strategies.latpfn_client import LaTPFNClient
 from app.strategies.momentum import LatPFNMomentumStrategy
@@ -1058,14 +1058,18 @@ class QuantRunner:
                                     continue
 
                             if user.exhaustion_filter_enabled:
-                                ok, diag = passes_exhaustion(bars, sig.side)
+                                # 'exhaustion_filter_enabled' is a legacy flag —
+                                # now routed through the gentler no-chase filter
+                                # which only blocks obvious top/bottom chasing
+                                # rather than requiring a full reversal pattern.
+                                ok, diag = passes_no_chase(bars, sig.side)
                                 if not ok:
                                     self._log_tick(
                                         symbol, "skip_exhaustion_filter",
                                         current_price=current_price,
                                         forecast_view=forecast_view,
                                         threshold=threshold,
-                                        reason=f"exhaustion_filter: {diag.get('reason')}",
+                                        reason=f"no_chase: {diag.get('reason')}",
                                         user_id=user.id,
                                         extra=diag,
                                     )
