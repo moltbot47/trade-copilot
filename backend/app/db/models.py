@@ -92,6 +92,14 @@ class User(Base):
     mfa_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Circuit breaker — auto-halt after N consecutive losing trades. Cools
+    # down for circuit_breaker_cooldown_minutes; during cooldown, runner
+    # skips entries with skip_circuit_breaker. After cooldown the breaker
+    # rearms — the next loss streak triggers it again.
+    circuit_breaker_n_losses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    circuit_breaker_cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    circuit_breaker_tripped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["Execution"]] = relationship(back_populates="user")
 

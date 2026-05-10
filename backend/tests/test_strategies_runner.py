@@ -270,3 +270,132 @@ def test_kill_switch_fail_soft_on_empty_state(db_session, seed_bots):
     assert allowed is True
     allowed, _ = runner._check_live_guardrails(user, {})
     assert allowed is True
+
+
+# ============================================================================
+# Circuit breaker tests (P2 #92) — auto-halt after N consecutive losses
+# ============================================================================
+
+from datetime import datetime, timedelta
+from app.db.models import TradeOutcome, Signal, Execution, ExecutionStatus, Bot
+
+
+def _make_loss_outcome(db_session, bot_id, user_id, pnl=-5.0, signal_id=None):
+    """Helper: create a TradeOutcome with a corresponding signal+execution
+    (the circuit breaker joins through Execution to find user-specific
+    trades)."""
+    if signal_id is None:
+        sig = Signal(bot_id=bot_id, instrument="BTCUSD", side="buy")
+        db_session.add(sig)
+        db_session.flush()
+        signal_id = sig.id
+        execu = Execution(
+            signal_id=signal_id,
+            user_id=user_id,
+            status=ExecutionStatus.filled,
+            executed_lot_size=0.01,
+        )
+        db_session.add(execu)
+        db_session.flush()
+    outcome = TradeOutcome(
+        bot_id=bot_id,
+        signal_id=signal_id,
+        instrument="BTCUSD",
+        side="buy",
+        timeframe="1m",
+        entry_price=80000.0,
+        exit_price=79900.0 if pnl < 0 else 80100.0,
+        qty=0.01,
+        pnl_usd=pnl,
+        r_multiple=-1.0 if pnl < 0 else 1.0,
+        opened_at=datetime.utcnow(),
+        closed_at=datetime.utcnow(),
+        hold_seconds=60,
+    )
+    db_session.add(outcome)
+    db_session.flush()
+    return outcome
+
+
+def test_circuit_breaker_disabled_when_n_zero(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = _make_user(env="live")
+    user.circuit_breaker_n_losses = None
+    allowed, reason = runner._check_circuit_breaker(user)
+    assert allowed is True
+    assert reason is None
+
+
+def test_circuit_breaker_passes_with_no_history(db_session, seed_bots):
+    """No closed trades yet → breaker has nothing to evaluate."""
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = User(email="cb-test@example.com", hashed_password="x"); user.id=1; db_session.add(user); db_session.flush()
+    user.circuit_breaker_n_losses = 3
+    db_session.commit()
+    allowed, _ = runner._check_circuit_breaker(user)
+    assert allowed is True
+
+
+def test_circuit_breaker_trips_after_n_losses(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = User(email="cb-test@example.com", hashed_password="x"); user.id=1; db_session.add(user); db_session.flush()
+    user.circuit_breaker_n_losses = 3
+    user.circuit_breaker_cooldown_minutes = 60
+    db_session.commit()
+
+    bot_id = seed_bots[2].id
+    runner.bot_id = bot_id
+    for _ in range(3):
+        _make_loss_outcome(db_session, bot_id, user.id, pnl=-5.0)
+    db_session.commit()
+
+    allowed, reason = runner._check_circuit_breaker(user)
+    assert allowed is False
+    assert "circuit_breaker_tripped" in (reason or "")
+    db_session.refresh(user)
+    assert user.circuit_breaker_tripped_at is not None
+
+
+def test_circuit_breaker_does_not_trip_with_mixed_results(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = User(email="cb-test@example.com", hashed_password="x"); user.id=1; db_session.add(user); db_session.flush()
+    user.circuit_breaker_n_losses = 3
+    db_session.commit()
+
+    bot_id = seed_bots[2].id
+    runner.bot_id = bot_id
+    _make_loss_outcome(db_session, bot_id, user.id, pnl=-5.0)
+    _make_loss_outcome(db_session, bot_id, user.id, pnl=10.0)  # winner
+    _make_loss_outcome(db_session, bot_id, user.id, pnl=-5.0)
+    db_session.commit()
+
+    allowed, _ = runner._check_circuit_breaker(user)
+    assert allowed is True
+
+
+def test_circuit_breaker_still_cooling_blocks_entries(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = User(email="cb-test@example.com", hashed_password="x"); user.id=1; db_session.add(user); db_session.flush()
+    user.circuit_breaker_n_losses = 3
+    user.circuit_breaker_cooldown_minutes = 60
+    user.circuit_breaker_tripped_at = datetime.utcnow() - timedelta(minutes=10)  # tripped 10 min ago
+    db_session.commit()
+
+    allowed, reason = runner._check_circuit_breaker(user)
+    assert allowed is False
+    assert "cooling" in (reason or "")
+
+
+def test_circuit_breaker_clears_after_cooldown(db_session, seed_bots):
+    runner = _make_quant_runner(db_session, seed_bots)
+    user = User(email="cb-test@example.com", hashed_password="x"); user.id=1; db_session.add(user); db_session.flush()
+    user.circuit_breaker_n_losses = 3
+    user.circuit_breaker_cooldown_minutes = 60
+    user.circuit_breaker_tripped_at = datetime.utcnow() - timedelta(minutes=120)  # cooled
+    db_session.commit()
+
+    allowed, _ = runner._check_circuit_breaker(user)
+    # No recent losses in DB, so breaker stays cleared
+    assert allowed is True
+    db_session.refresh(user)
+    assert user.circuit_breaker_tripped_at is None

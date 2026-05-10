@@ -125,6 +125,9 @@ def _apply_lightweight_migrations() -> None:
         ("users", "bot_paused", "BOOLEAN DEFAULT 0"),
         ("users", "mfa_secret", "TEXT DEFAULT NULL"),
         ("users", "mfa_enabled", "BOOLEAN DEFAULT 0"),
+        ("users", "circuit_breaker_n_losses", "INTEGER DEFAULT NULL"),
+        ("users", "circuit_breaker_cooldown_minutes", "INTEGER DEFAULT 60"),
+        ("users", "circuit_breaker_tripped_at", "DATETIME DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
@@ -240,12 +243,159 @@ async def _periodic_token_refresh_task() -> None:
         try:
             summary = await proactive_refresh_all()
             logger.info("periodic TL token refresh: %s", summary)
+            # Treat "all refreshes failed and we had at least one user" as
+            # a health alert. Refreshed=0 with no users isn't a failure.
+            try:
+                from app.monitoring.alerts import maybe_alert
+                had_users = (summary.get("refreshed", 0) + summary.get("failed", 0)) > 0
+                all_failed = had_users and summary.get("refreshed", 0) == 0
+                await maybe_alert("token_refresh", failure=all_failed)
+            except Exception as exc:
+                logger.debug("token-refresh alert publish failed: %s", exc)
         except Exception as exc:
             logger.warning("periodic TL token refresh raised: %s", exc)
+            try:
+                from app.monitoring.alerts import maybe_alert
+                await maybe_alert("token_refresh", failure=True)
+            except Exception:
+                pass
         try:
             await _aio.sleep(interval_seconds)
         except _aio.CancelledError:
             return
+
+
+async def _auto_resume_runners() -> None:
+    """On startup, re-spawn runners that were running when the process died.
+
+    StrategyState.is_running is set when the runner starts and cleared
+    when it stops cleanly. After a machine restart (Fly deploy, crash,
+    OOM kill), the DB row still says is_running=True but the asyncio
+    task is gone — so the bot is silently dead. This restores them.
+
+    Skips:
+      - states with paused_until > now (cooldown)
+      - bots with no user subscriptions (nobody to trade for)
+      - rows missing required fields
+    """
+    from datetime import datetime as _dt
+    from app.db.database import SessionLocal
+    from app.db.models import StrategyState, Bot, Subscription, User
+
+    db = SessionLocal()
+    try:
+        states = db.query(StrategyState).filter(StrategyState.is_running.is_(True)).all()
+    finally:
+        db.close()
+
+    if not states:
+        return
+
+    for state in states:
+        try:
+            if state.paused_until and state.paused_until > _dt.utcnow():
+                logger.info("auto-resume skip: bot=%s tf=%s paused until %s",
+                            state.bot_id, state.timeframe, state.paused_until)
+                continue
+            db = SessionLocal()
+            try:
+                bot = db.query(Bot).filter(Bot.id == state.bot_id).first()
+                if bot is None:
+                    continue
+                subs = (
+                    db.query(Subscription, User)
+                    .join(User, Subscription.user_id == User.id)
+                    .filter(
+                        Subscription.bot_id == state.bot_id,
+                        Subscription.is_paused.is_(False),
+                        User.is_active.is_(True),
+                    )
+                    .all()
+                )
+                user_emails = [u.email for _, u in subs]
+                if not user_emails:
+                    continue
+                symbols = [s.strip() for s in (bot.instruments_csv or "").split(",") if s.strip()]
+                if not symbols:
+                    continue
+            finally:
+                db.close()
+
+            # Pick runner type by bot strategy. Match the same logic as
+            # /api/strategy/start so resume behaves identically.
+            from app.db.models import StrategyType
+            from app.db.database import SessionLocal as _SL
+
+            if bot.strategy_type in (StrategyType.latpfn_quant, StrategyType.latpfn_momentum):
+                from app.strategies.runner import QuantRunner
+                await QuantRunner.start(
+                    db_session_factory=_SL,
+                    bot_id=state.bot_id,
+                    timeframe=state.timeframe,
+                    symbols=symbols,
+                    user_emails=user_emails,
+                )
+            else:
+                from app.strategies.runner import StrategyRunner
+                await StrategyRunner.start(
+                    db_session_factory=_SL,
+                    bot_id=state.bot_id,
+                    timeframe=state.timeframe,
+                    symbols=symbols,
+                    user_emails=user_emails,
+                )
+            logger.info("auto-resumed runner bot=%s tf=%s users=%d symbols=%s",
+                        state.bot_id, state.timeframe, len(user_emails), symbols)
+        except Exception as exc:
+            logger.warning("auto-resume failed bot=%s tf=%s: %s",
+                           state.bot_id, state.timeframe, exc)
+
+
+def _run_alembic_upgrade() -> None:
+    """Apply Alembic migrations to ``head`` at startup.
+
+    On a fresh database, ``Base.metadata.create_all`` has already produced
+    the schema, so the only thing left for Alembic to do is stamp the
+    baseline revision (``0001_baseline`` is a no-op). On an existing DB
+    that's been stamped previously, this applies any pending revisions.
+    Failures are logged but never crash boot — ``_apply_lightweight_migrations``
+    remains the belt-and-suspenders for live DBs that haven't been stamped yet.
+    """
+    import os
+    from pathlib import Path
+
+    try:
+        from alembic import command
+        from alembic.config import Config
+        from alembic.runtime.migration import MigrationContext
+    except ImportError as exc:
+        logger.warning("alembic not installed; skipping migrations: %s", exc)
+        return
+
+    ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
+    if not ini_path.exists():
+        logger.warning("alembic.ini not found at %s; skipping migrations", ini_path)
+        return
+
+    cfg = Config(str(ini_path))
+    # Ensure alembic uses the same DATABASE_URL as the running app.
+    db_url = os.getenv("DATABASE_URL") or get_settings().DATABASE_URL
+    cfg.set_main_option("sqlalchemy.url", db_url)
+
+    try:
+        with engine.connect() as conn:
+            mig_ctx = MigrationContext.configure(conn)
+            current_rev = mig_ctx.get_current_revision()
+        if current_rev is None:
+            # Fresh DB (or pre-Alembic live DB): create_all already produced
+            # the tables, so stamp head rather than re-running migrations.
+            command.stamp(cfg, "head")
+            logger.info("alembic: stamped fresh DB at head")
+        else:
+            command.upgrade(cfg, "head")
+            logger.info("alembic: upgraded from %s to head", current_rev)
+    except Exception as exc:  # noqa: BLE001 — never crash boot on migrations
+        logger.warning("alembic upgrade failed (continuing): %s", exc)
 
 
 async def lifespan(_: FastAPI):
@@ -253,6 +403,7 @@ async def lifespan(_: FastAPI):
 
     get_settings().assert_production_safe()
     Base.metadata.create_all(bind=engine)
+    _run_alembic_upgrade()
     _apply_lightweight_migrations()
     try:
         _seed_starter_bots()
@@ -261,6 +412,11 @@ async def lifespan(_: FastAPI):
     _seed_advanced_bots()
 
     refresh_task = _aio.create_task(_periodic_token_refresh_task())
+    # Auto-resume runners that were running before the last shutdown.
+    try:
+        await _auto_resume_runners()
+    except Exception as exc:
+        logger.warning("auto-resume runners failed: %s", exc)
     try:
         yield
     finally:

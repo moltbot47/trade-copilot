@@ -71,12 +71,31 @@ def tf_seconds(tf: str) -> int:
     return 60
 
 
-# Track running runner tasks so the API can stop them.
-_RUNNERS: dict[tuple[int, str], "StrategyRunner"] = {}
+# Track running runner tasks so the API can stop them. Keyed by
+# (bot_id, timeframe, runner_type_name) so StrategyRunner and QuantRunner
+# can't accidentally overwrite each other on the same (bot, tf) — that
+# bug previously caused type-confused returns where one class's instance
+# leaked through a hole expected to hold the other class. Audit finding
+# 2026-05-10 (HIGH severity).
+_RUNNERS: dict[tuple[int, str, str], "StrategyRunner"] = {}
+
+
+def _runner_key(bot_id: int, timeframe: str, runner_cls_name: str) -> tuple[int, str, str]:
+    return (bot_id, timeframe, runner_cls_name)
 
 
 def get_runner(bot_id: int, timeframe: str) -> Optional["StrategyRunner"]:
-    return _RUNNERS.get((bot_id, timeframe))
+    """Return whichever runner type is registered for this (bot, tf).
+
+    The API doesn't always know whether it's a StrategyRunner or QuantRunner
+    upfront, so we look for either. If both happen to be running (which
+    shouldn't happen but the registry now permits), QuantRunner wins.
+    """
+    for cls_name in ("QuantRunner", "StrategyRunner"):
+        r = _RUNNERS.get((bot_id, timeframe, cls_name))
+        if r is not None:
+            return r
+    return None
 
 
 class StrategyRunner:
@@ -104,9 +123,9 @@ class StrategyRunner:
     @classmethod
     async def start(cls, **kwargs) -> "StrategyRunner":
         runner = cls(**kwargs)
-        key = (runner.bot_id, runner.timeframe)
+        key = _runner_key(runner.bot_id, runner.timeframe, cls.__name__)
         existing = _RUNNERS.get(key)
-        if existing and existing.task and not existing.task.done():
+        if existing and existing.task and not existing.task.done() and isinstance(existing, cls):
             return existing
         runner.task = asyncio.create_task(runner.run_loop(), name=f"runner-{runner.bot_id}-{runner.timeframe}")
         _RUNNERS[key] = runner
@@ -120,7 +139,7 @@ class StrategyRunner:
                 await self.task
             except (asyncio.CancelledError, Exception):
                 pass
-        _RUNNERS.pop((self.bot_id, self.timeframe), None)
+        _RUNNERS.pop(_runner_key(self.bot_id, self.timeframe, type(self).__name__), None)
 
         db = self.db_session_factory()
         try:
@@ -648,10 +667,10 @@ class QuantRunner:
     @classmethod
     async def start(cls, **kwargs) -> "QuantRunner":
         runner = cls(**kwargs)
-        key = (runner.bot_id, runner.timeframe)
+        key = _runner_key(runner.bot_id, runner.timeframe, cls.__name__)
         existing = _RUNNERS.get(key)
-        if existing and existing.task and not existing.task.done():
-            return existing  # type: ignore[return-value]
+        if existing and existing.task and not existing.task.done() and isinstance(existing, cls):
+            return existing
         runner.task = asyncio.create_task(
             runner.run_loop(), name=f"quant-{runner.bot_id}-{runner.timeframe}"
         )
@@ -666,7 +685,7 @@ class QuantRunner:
                 await self.task
             except (asyncio.CancelledError, Exception):
                 pass
-        _RUNNERS.pop((self.bot_id, self.timeframe), None)
+        _RUNNERS.pop(_runner_key(self.bot_id, self.timeframe, type(self).__name__), None)
 
         # Mark StrategyState.is_running=False so the dashboard reflects it.
         db = self.db_session_factory()
@@ -855,6 +874,72 @@ class QuantRunner:
         except Exception as exc:
             logger.debug("tick log failed: %s", exc)
 
+    def _check_circuit_breaker(self, user: User) -> tuple[bool, str | None]:
+        """Block entries if the user's consecutive-loss circuit breaker is tripped.
+
+        Returns (allowed, reason). The breaker trips when the last N closed
+        TradeOutcomes for this user across this bot are all losses (pnl < 0).
+        Once tripped, ``circuit_breaker_tripped_at`` is set; entries are
+        blocked until cooldown elapses. The runner clears the tripped state
+        opportunistically on the next entry attempt past the cooldown.
+        """
+        from datetime import datetime, timedelta
+        from app.db.models import TradeOutcome
+
+        n_losses = int(user.circuit_breaker_n_losses or 0)
+        if n_losses <= 0:
+            return True, None
+
+        # Check existing cooldown window
+        tripped_at = user.circuit_breaker_tripped_at
+        cooldown = int(user.circuit_breaker_cooldown_minutes or 60)
+        if tripped_at is not None:
+            elapsed = datetime.utcnow() - tripped_at
+            if elapsed < timedelta(minutes=cooldown):
+                remaining = timedelta(minutes=cooldown) - elapsed
+                return False, f"circuit_breaker_cooling remaining={int(remaining.total_seconds())}s"
+            # Cooldown over — clear and re-evaluate
+            db = self.db_session_factory()
+            try:
+                from app.db.models import User as _User
+                u = db.query(_User).filter(_User.id == user.id).first()
+                if u is not None:
+                    u.circuit_breaker_tripped_at = None
+                    db.commit()
+                    user.circuit_breaker_tripped_at = None
+            finally:
+                db.close()
+
+        # Evaluate the last N closed trades for this user across this bot.
+        db = self.db_session_factory()
+        try:
+            from app.db.models import Execution
+            recent = (
+                db.query(TradeOutcome)
+                .join(Execution, Execution.signal_id == TradeOutcome.signal_id)
+                .filter(
+                    TradeOutcome.bot_id == self.bot_id,
+                    Execution.user_id == user.id,
+                )
+                .order_by(TradeOutcome.id.desc())
+                .limit(n_losses)
+                .all()
+            )
+            if len(recent) < n_losses:
+                return True, None  # not enough history yet
+            if all(t.pnl_usd is not None and t.pnl_usd < 0 for t in recent):
+                # Trip it
+                from app.db.models import User as _User
+                u = db.query(_User).filter(_User.id == user.id).first()
+                if u is not None:
+                    u.circuit_breaker_tripped_at = datetime.utcnow()
+                    db.commit()
+                    user.circuit_breaker_tripped_at = u.circuit_breaker_tripped_at
+                return False, f"circuit_breaker_tripped {n_losses} consecutive losses"
+            return True, None
+        finally:
+            db.close()
+
     def _check_live_guardrails(
         self, user: User, account_state: dict | None
     ) -> tuple[bool, str | None]:
@@ -961,14 +1046,28 @@ class QuantRunner:
             # broker is unreachable, we'd rather skip the tick than fire on
             # fabricated prices (we lost real money to phantom trades — see
             # the $118 BTC trade in trade_log on 2026-05-10).
-            if getattr(bars, "attrs", {}).get("synthetic"):
+            synthetic_now = bool(getattr(bars, "attrs", {}).get("synthetic"))
+            if synthetic_now:
                 self._log_tick(
                     symbol,
                     "skip_synthetic_data",
                     threshold=threshold,
                     reason="bars are synthetic (broker unreachable) — refusing to trade",
                 )
+                # Fire health alert if synthetic streak exceeds threshold
+                try:
+                    from app.monitoring.alerts import maybe_alert
+                    asyncio.ensure_future(maybe_alert(f"synthetic_{symbol}", failure=True))
+                except Exception as exc:
+                    logger.debug("alert publish failed: %s", exc)
                 continue
+            else:
+                # Healthy bar — reset the streak if it had been alerted
+                try:
+                    from app.monitoring.alerts import maybe_alert
+                    asyncio.ensure_future(maybe_alert(f"synthetic_{symbol}", failure=False))
+                except Exception:
+                    pass
 
             current_price = float(bars["close"].iloc[-1]) if len(bars) else None
             forecast_view = await strategy.forecast_view(bars) if current_price else None
@@ -1061,6 +1160,19 @@ class QuantRunner:
                                     forecast_view=forecast_view,
                                     threshold=threshold,
                                     reason=ks_reason or "kill switch",
+                                    user_id=user.id,
+                                )
+                                continue
+
+                            # ---- Step 2b: Circuit breaker (N consecutive losses) ----
+                            cb_allowed, cb_reason = self._check_circuit_breaker(user)
+                            if not cb_allowed:
+                                self._log_tick(
+                                    symbol, "skip_kill_switch",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason=cb_reason or "circuit_breaker",
                                     user_id=user.id,
                                 )
                                 continue
