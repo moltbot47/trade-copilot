@@ -21,12 +21,10 @@ import type {
   EquityPoint,
 } from "@/lib/types";
 import type { StrategyEvent, WsChannel } from "@/lib/ws-types";
+import { rollingStats, rollingEquityPoints } from "@/lib/rolling-stats";
 
 const DEFAULT_BOT_ID = 5; // LaT-PFN Quant Trader (most advanced — pyramiding + scale-out + trail SL)
 const DEFAULT_SYMBOLS = ["BTCUSD", "ETHUSD"];  // crypto-only by default; quant fires aggressively on these
-// Equity is still REST-fetched on mount + when state changes — there's no
-// dedicated equity channel in the WS protocol v1.
-const EQUITY_REFRESH_MS = 30_000;
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -193,31 +191,15 @@ export default function StrategyPage() {
     else if (ws.status === "closed") setOffline(true);
   }, [ws.status]);
 
-  // Equity has no dedicated WS channel — refresh on a much slower interval
-  // and whenever a trade close event arrives.
+  // Equity is now derived client-side from recentTrades — instant updates
+  // on every trade close, no REST polling. Server equity is still fetched
+  // once on mount (in `refresh` above) as the initial backfill, but after
+  // that we recompute as trades stream in via the strategy WS event.
   useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const eq = await api.getStrategyEquity(botId);
-        setEquity(eq.points || []);
-      } catch {
-        // ignore; offline banner already drives UX
-      }
-    }, EQUITY_REFRESH_MS);
-    return () => clearInterval(t);
-  }, [botId]);
-
-  useEffect(() => {
-    const off = ws.subscribe("trades", async () => {
-      try {
-        const eq = await api.getStrategyEquity(botId);
-        setEquity(eq.points || []);
-      } catch {
-        // ignore
-      }
-    });
-    return off;
-  }, [botId, ws.subscribe]);
+    if (recentTrades.length > 0) {
+      setEquity(rollingEquityPoints(recentTrades));
+    }
+  }, [recentTrades]);
 
   // Tick "Last updated Xs ago" every second
   useEffect(() => {
@@ -225,11 +207,35 @@ export default function StrategyPage() {
     return () => clearInterval(t);
   }, []);
 
-  const lastUpdatedLabel = useMemo(() => {
-    if (!lastUpdated) return "—";
-    const diff = Math.max(0, Math.round((tickNow - lastUpdated.getTime()) / 1000));
-    return `${diff}s ago`;
+  const secondsSinceUpdate = useMemo(() => {
+    if (!lastUpdated) return null;
+    return Math.max(0, Math.round((tickNow - lastUpdated.getTime()) / 1000));
   }, [lastUpdated, tickNow]);
+
+  const lastUpdatedLabel =
+    secondsSinceUpdate === null ? "—" : `${secondsSinceUpdate}s ago`;
+
+  // Color-code freshness: green <15s, amber 15-60s, red >60s
+  const freshnessColor =
+    secondsSinceUpdate === null
+      ? "var(--text-dim)"
+      : secondsSinceUpdate < 15
+      ? "var(--accent)"
+      : secondsSinceUpdate < 60
+      ? "var(--warn)"
+      : "var(--danger)";
+
+  // Dot class drives connectivity indicator next to "live ws stream"
+  const wsDotClass =
+    ws.status === "open"
+      ? secondsSinceUpdate !== null && secondsSinceUpdate < 15
+        ? "live-dot fresh"
+        : secondsSinceUpdate !== null && secondsSinceUpdate < 60
+        ? "live-dot stale"
+        : "live-dot fresh"
+      : ws.status === "closed"
+      ? "live-dot dead"
+      : "live-dot stale";
 
   const [commandInFlight, setCommandInFlight] = useState(false);
 
@@ -280,14 +286,22 @@ export default function StrategyPage() {
     }
   };
 
-  // Stats
-  const winRate = perf ? perf.win_rate : 0;
-  const profitFactor = perf ? perf.profit_factor : 0;
-  const sharpe = perf ? perf.sharpe : 0;
-  const maxDD = perf ? perf.max_drawdown_pct : 0;
+  // Stats — prefer client-side rolling computation from recent_trades for
+  // instant updates on every close. Falls back to the server snapshot when
+  // the trade list is empty (e.g. server has older history we don't yet
+  // have streamed in).
+  const live = useMemo(
+    () => rollingStats(recentTrades, 20),
+    [recentTrades],
+  );
+  const effective = live ?? perf;
+  const winRate = effective ? effective.win_rate : 0;
+  const profitFactor = effective ? effective.profit_factor : 0;
+  const sharpe = effective ? effective.sharpe : 0;
+  const maxDD = effective ? effective.max_drawdown_pct : 0;
 
-  const winRateTrend = perf
-    ? trendOf(perf.win_rate, prevPerfRef.current?.win_rate ?? null)
+  const winRateTrend = effective
+    ? trendOf(effective.win_rate, prevPerfRef.current?.win_rate ?? null)
     : null;
 
   const lastFeedback = snapshots.find((s) => !!s.feedback_action) || null;
@@ -314,8 +328,11 @@ export default function StrategyPage() {
             <span className="accent">{botName}</span>
           </h1>
           <p className="dim" style={{ margin: 0, fontSize: "0.85rem" }}>
-            zero-shot forecasting · self-tuning threshold · live ws stream{" "}
-            {ws.status === "open" ? "(connected)" : `(${ws.status})`}
+            zero-shot forecasting · self-tuning threshold ·{" "}
+            <span className={wsDotClass} aria-hidden="true" />
+            <span style={{ color: ws.status === "open" ? "var(--accent)" : "var(--text-dim)" }}>
+              live ws stream {ws.status === "open" ? "(connected)" : `(${ws.status})`}
+            </span>
           </p>
         </div>
 
@@ -409,15 +426,24 @@ export default function StrategyPage() {
           )}
         </div>
         <div
-          className="dim"
           style={{ fontSize: "0.78rem" }}
           role="status"
           aria-live="polite"
         >
-          last updated: {lastUpdatedLabel}
+          <span className="dim">last updated: </span>
+          <span
+            style={{
+              color: freshnessColor,
+              fontWeight: 600,
+              transition: "color 240ms ease",
+            }}
+          >
+            {lastUpdatedLabel}
+          </span>
           {state?.last_signal_at && (
             <>
-              {"  ·  "}last signal: {formatRelative(state.last_signal_at)}
+              <span className="dim">{"  ·  "}last signal: </span>
+              <span className="dim">{formatRelative(state.last_signal_at)}</span>
             </>
           )}
         </div>

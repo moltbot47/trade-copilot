@@ -339,3 +339,66 @@ input[type="range"]::-moz-range-thumb {
 @media (pointer: coarse) {
   button, a.btn, [role="button"], select { min-height: 44px; }
 }
+
+/* === Live freshness animations === */
+
+/* StatsCard pulse: brief glow + tiny scale on value change */
+.stats-card-pulse {
+  animation: stats-pulse 320ms ease-out;
+}
+@keyframes stats-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--pulse-color, var(--accent));
+    transform: scale(1);
+  }
+  35% {
+    box-shadow: 0 0 0 6px transparent;
+    transform: scale(1.015);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+}
+
+/* Live status dot — colored circle that pulses gently when fresh */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: baseline;
+  background: var(--text-dim);
+}
+.live-dot.fresh {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: live-dot-pulse 1.6s ease-in-out infinite;
+}
+.live-dot.stale {
+  background: var(--warn);
+}
+.live-dot.dead {
+  background: var(--danger);
+}
+@keyframes live-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Spinner for buttons in pending state */
+.spinner-inline {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 0.4em;
+  vertical-align: -0.1em;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
