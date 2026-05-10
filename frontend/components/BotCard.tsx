@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { api, ApiError, getUserEmail } from "@/lib/api";
+import { getUserEmail } from "@/lib/api";
 import type { Bot } from "@/lib/types";
+import SubscribeModal from "./SubscribeModal";
 
 function RiskBars({ level }: { level: number }) {
   const cells = [1, 2, 3, 4, 5];
@@ -66,30 +67,15 @@ export default function BotCard({ bot }: { bot: Bot }) {
 }
 
 function SubscribeButton({ bot }: { bot: Bot }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
-  const onClick = async () => {
-    setErr(null);
+  const onClick = () => {
     if (!getUserEmail()) {
       // Not logged in — send to strategy page; EmailGate prompts there.
       window.location.href = `/strategy?bot=${encodeURIComponent(bot.slug)}`;
       return;
     }
-    setBusy(true);
-    try {
-      // Default aggression = 5 (balanced). User can change on /strategy slider.
-      await api.subscribeToBot(bot.id, 5);
-    } catch (e) {
-      // 409 (already subscribed) is fine — keep going.
-      if (!(e instanceof ApiError) || e.status !== 409) {
-        setErr((e as Error)?.message || "subscribe failed");
-        setBusy(false);
-        return;
-      }
-    }
-    // Either created or already-existed — go to strategy view for this bot.
-    window.location.href = `/strategy?bot=${encodeURIComponent(bot.slug)}`;
+    setOpen(true);
   };
 
   return (
@@ -98,16 +84,10 @@ function SubscribeButton({ bot }: { bot: Bot }) {
         type="button"
         className="btn btn-primary"
         onClick={onClick}
-        disabled={busy}
       >
-        {busy ? "subscribing..." : "Subscribe"}
+        Subscribe
       </button>
-      {err && (
-        <p className="danger" style={{ marginTop: "0.4rem", fontSize: "0.78rem" }}>
-          {err}
-        </p>
-      )}
-      {/* Keep a quiet escape hatch for users who want to connect Genesis FX first. */}
+      {/* Quiet escape hatch for users who want to connect Genesis FX first. */}
       <Link
         href={`/connect?bot=${encodeURIComponent(bot.slug)}`}
         className="dim"
@@ -119,6 +99,15 @@ function SubscribeButton({ bot }: { bot: Bot }) {
       >
         connect broker first
       </Link>
+      {open && (
+        <SubscribeModal
+          bot={bot}
+          onClose={() => setOpen(false)}
+          onSuccess={() => {
+            window.location.href = `/strategy?bot=${encodeURIComponent(bot.slug)}`;
+          }}
+        />
+      )}
     </div>
   );
 }
