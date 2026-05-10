@@ -882,12 +882,12 @@ class QuantRunner:
 
     def _count_user_open_cohorts(self, tm_db: Session, user_id: int) -> int:
         """Total open cohorts for this user across all symbols on this bot."""
-        from app.db.models import TradeCohort, CohortStatus
+        from app.db.models import Cohort, CohortStatus
 
-        q = tm_db.query(TradeCohort).filter(
-            TradeCohort.user_id == user_id,
-            TradeCohort.bot_id == self.bot_id,
-            TradeCohort.status != CohortStatus.closed,
+        q = tm_db.query(Cohort).filter(
+            Cohort.user_id == user_id,
+            Cohort.bot_id == self.bot_id,
+            Cohort.status != CohortStatus.closed,
         )
         return q.count()
 
