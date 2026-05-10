@@ -1,0 +1,5544 @@
+{
+  "strategy": "latpfn_quant",
+  "symbol": "BTCUSD",
+  "bars_count": 500,
+  "start_ts": "2024-01-01 00:00:00",
+  "end_ts": "2024-01-01 08:19:00",
+  "trades": [
+    {
+      "kind": "exit",
+      "cohort_id": 1,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80424.49364571324,
+      "exit_price": 80288.7734070887,
+      "pnl_usd": -1.357202,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:32:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 2,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80276.86414020763,
+      "exit_price": 80152.87960959673,
+      "pnl_usd": -1.239845,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:33:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 3,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80146.31615991803,
+      "exit_price": 80210.45709549234,
+      "pnl_usd": 0.641409,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:34:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 4,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80245.11396793861,
+      "exit_price": 80313.15873911206,
+      "pnl_usd": 0.680448,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:35:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 5,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80426.50769996137,
+      "exit_price": 80284.29429873126,
+      "pnl_usd": -1.422134,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:37:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 6,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80273.18353878305,
+      "exit_price": 80136.63340338257,
+      "pnl_usd": -1.365501,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:38:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 7,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80140.92514940618,
+      "exit_price": 80209.62638278327,
+      "pnl_usd": 0.687012,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:39:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 8,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80245.2712373198,
+      "exit_price": 80316.29896021089,
+      "pnl_usd": 0.710277,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:40:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 9,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80364.64520567091,
+      "exit_price": 80437.1705967861,
+      "pnl_usd": 0.725254,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:41:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 10,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80451.99344077648,
+      "exit_price": 80526.55162529627,
+      "pnl_usd": 0.745582,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:46:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 11,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80576.54170932398,
+      "exit_price": 80639.25627298221,
+      "pnl_usd": 0.627146,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:47:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 12,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80612.5828794923,
+      "exit_price": 80672.67964313466,
+      "pnl_usd": 0.600968,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:48:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 13,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80722.11517736854,
+      "exit_price": 80781.3705635581,
+      "pnl_usd": 0.592554,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:50:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 14,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80779.7226330804,
+      "exit_price": 80833.32731516924,
+      "pnl_usd": 0.536047,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:51:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 15,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80881.77762120515,
+      "exit_price": 80776.91274295533,
+      "pnl_usd": -1.048649,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:52:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 16,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80646.40605487922,
+      "exit_price": 80536.16613306817,
+      "pnl_usd": -1.102399,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:53:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 17,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80594.86186439222,
+      "exit_price": 80481.43369193107,
+      "pnl_usd": -1.134282,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:54:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 18,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80519.0782783128,
+      "exit_price": 80409.64342699762,
+      "pnl_usd": -1.094349,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:55:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 19,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80416.26026950395,
+      "exit_price": 80472.457010274,
+      "pnl_usd": 0.561967,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:57:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 20,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80612.68312587183,
+      "exit_price": 80489.36554495555,
+      "pnl_usd": -1.233176,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 00:58:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 21,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80473.2099821723,
+      "exit_price": 80538.56174919139,
+      "pnl_usd": 0.653518,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 00:59:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 22,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80629.2019117309,
+      "exit_price": 80487.76637463311,
+      "pnl_usd": -1.414355,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:00:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 23,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80358.28119854978,
+      "exit_price": 80433.59147996282,
+      "pnl_usd": 0.753103,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:03:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 24,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80424.85994458386,
+      "exit_price": 80500.39322653203,
+      "pnl_usd": 0.755333,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:04:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 25,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80539.34194405889,
+      "exit_price": 80617.91187504913,
+      "pnl_usd": 0.785699,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:05:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 26,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80667.23470911084,
+      "exit_price": 80507.72668587026,
+      "pnl_usd": -1.59508,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:10:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 27,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80438.45002816152,
+      "exit_price": 80290.63694545353,
+      "pnl_usd": -1.478131,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:11:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 28,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80256.33675890382,
+      "exit_price": 80112.48284978008,
+      "pnl_usd": -1.438539,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:12:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 29,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80108.88862737776,
+      "exit_price": 80181.25834120419,
+      "pnl_usd": 0.723697,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:13:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 30,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80188.58223069356,
+      "exit_price": 80258.23561557099,
+      "pnl_usd": 0.696534,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:15:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 31,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80322.2734715799,
+      "exit_price": 80195.52267791654,
+      "pnl_usd": -1.267508,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:17:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 32,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80279.11779815168,
+      "exit_price": 80347.17771261855,
+      "pnl_usd": 0.680599,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:18:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 33,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80379.62435083542,
+      "exit_price": 80446.25294534652,
+      "pnl_usd": 0.666286,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:20:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 34,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80403.32837201805,
+      "exit_price": 80268.60676594664,
+      "pnl_usd": -1.347216,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:22:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 35,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80238.67362458802,
+      "exit_price": 80108.6080780119,
+      "pnl_usd": -1.300655,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:24:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 36,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79985.90713438376,
+      "exit_price": 80051.37828218153,
+      "pnl_usd": 0.654711,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:25:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 37,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80063.84695402037,
+      "exit_price": 79937.82932734724,
+      "pnl_usd": -1.260176,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:26:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 38,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79988.71791103522,
+      "exit_price": 80050.81291084424,
+      "pnl_usd": 0.62095,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:28:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 39,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80067.66423902994,
+      "exit_price": 80130.53117678892,
+      "pnl_usd": 0.628669,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:29:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 40,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80139.20159448404,
+      "exit_price": 80200.88355581413,
+      "pnl_usd": 0.61682,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:30:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 41,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80245.9194499785,
+      "exit_price": 80120.11061185211,
+      "pnl_usd": -1.258088,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:34:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 42,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79879.41937927494,
+      "exit_price": 79757.9333790063,
+      "pnl_usd": -1.21486,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:35:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 43,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79648.5646050976,
+      "exit_price": 79515.13239223845,
+      "pnl_usd": -1.334322,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:36:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 44,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79438.14080423646,
+      "exit_price": 79290.60079830725,
+      "pnl_usd": -1.4754,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:37:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 45,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79279.85983408686,
+      "exit_price": 79279.85983408686,
+      "pnl_usd": 0.0,
+      "r_multiple": 0.0,
+      "ts": "2024-01-01 01:39:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 46,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79199.71595420236,
+      "exit_price": 79274.41685916504,
+      "pnl_usd": 0.747009,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:41:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 47,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79345.74670739078,
+      "exit_price": 79424.2740215831,
+      "pnl_usd": 0.785273,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:43:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 48,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79406.27116486347,
+      "exit_price": 79249.23602393636,
+      "pnl_usd": -1.570351,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:44:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 49,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79258.13930909596,
+      "exit_price": 79098.54308273304,
+      "pnl_usd": -1.595962,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:46:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 50,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79075.19162126629,
+      "exit_price": 79160.1077237488,
+      "pnl_usd": 0.849161,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:48:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 51,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79154.50821714944,
+      "exit_price": 78990.74909620704,
+      "pnl_usd": -1.637591,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:49:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 52,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78881.52961289474,
+      "exit_price": 78964.35297761767,
+      "pnl_usd": 0.828234,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:50:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 53,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78950.09539818548,
+      "exit_price": 78796.14527131576,
+      "pnl_usd": -1.539501,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 01:53:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 54,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78665.99707966903,
+      "exit_price": 78742.2496612322,
+      "pnl_usd": 0.762526,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 01:58:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 55,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78886.40392934541,
+      "exit_price": 78751.39183200295,
+      "pnl_usd": -1.350121,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:00:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 56,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78687.41145073167,
+      "exit_price": 78755.30434399702,
+      "pnl_usd": 0.678929,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:02:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 57,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78750.27195633191,
+      "exit_price": 78810.66804451589,
+      "pnl_usd": 0.603961,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:03:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 58,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78964.63596760762,
+      "exit_price": 79022.62892467208,
+      "pnl_usd": 0.57993,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:04:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 59,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79096.63468158455,
+      "exit_price": 79156.10036067232,
+      "pnl_usd": 0.594657,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:05:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 60,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79153.10943297936,
+      "exit_price": 79213.67323999744,
+      "pnl_usd": 0.605638,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:06:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 61,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79385.09868570548,
+      "exit_price": 79256.18033615833,
+      "pnl_usd": -1.289183,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:07:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 62,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79196.58273054635,
+      "exit_price": 79070.87033420497,
+      "pnl_usd": -1.257124,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:09:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 63,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78948.87535720419,
+      "exit_price": 78808.11361244491,
+      "pnl_usd": -1.407617,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:11:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 64,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78670.44176137823,
+      "exit_price": 78749.0271950182,
+      "pnl_usd": 0.785854,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:12:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 65,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78770.44047334987,
+      "exit_price": 78624.73886806284,
+      "pnl_usd": -1.457016,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:14:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 66,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78504.17025215633,
+      "exit_price": 78351.80836079548,
+      "pnl_usd": -1.523619,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:15:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 67,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78344.87769491879,
+      "exit_price": 78427.49727784979,
+      "pnl_usd": 0.826196,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:17:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 68,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78525.53592334587,
+      "exit_price": 78606.28968603481,
+      "pnl_usd": 0.807538,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:18:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 69,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78839.75163671131,
+      "exit_price": 78927.16363440067,
+      "pnl_usd": 0.87412,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:19:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 70,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79300.54942017578,
+      "exit_price": 79402.39026385017,
+      "pnl_usd": 1.018408,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:20:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 71,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79366.30245657769,
+      "exit_price": 79171.25064786446,
+      "pnl_usd": -1.950518,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:21:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 72,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79209.3858193352,
+      "exit_price": 79010.30759211461,
+      "pnl_usd": -1.990782,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:22:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 73,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78872.34875576363,
+      "exit_price": 78651.480715674,
+      "pnl_usd": -2.20868,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:26:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 74,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78624.65598903912,
+      "exit_price": 78724.87680654317,
+      "pnl_usd": 1.002208,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:28:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 75,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78770.27606148124,
+      "exit_price": 78577.7656312198,
+      "pnl_usd": -1.925104,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:31:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 76,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78607.03807118279,
+      "exit_price": 78422.01059366477,
+      "pnl_usd": -1.850275,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:32:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 77,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78344.19476412333,
+      "exit_price": 78434.4392690337,
+      "pnl_usd": 0.902445,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:35:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 78,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78536.81936600732,
+      "exit_price": 78612.07380306006,
+      "pnl_usd": 0.752544,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:37:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 79,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78711.83925737476,
+      "exit_price": 78579.10612302969,
+      "pnl_usd": -1.327331,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:38:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 80,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78633.27753963474,
+      "exit_price": 78497.24812713834,
+      "pnl_usd": -1.360294,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:39:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 81,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78447.14615786342,
+      "exit_price": 78300.46293415932,
+      "pnl_usd": -1.466832,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:40:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 82,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78295.87089171447,
+      "exit_price": 78372.17099369108,
+      "pnl_usd": 0.763001,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:42:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 83,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78515.91589414405,
+      "exit_price": 78346.22375671323,
+      "pnl_usd": -1.696921,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:43:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 84,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78387.0379269281,
+      "exit_price": 78476.59774283937,
+      "pnl_usd": 0.895598,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:44:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 85,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78518.60158082814,
+      "exit_price": 78610.11643246419,
+      "pnl_usd": 0.915149,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:49:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 86,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78552.55979633563,
+      "exit_price": 78389.67153876224,
+      "pnl_usd": -1.628883,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:53:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 87,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78256.3004262445,
+      "exit_price": 78099.99823616701,
+      "pnl_usd": -1.563022,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 02:54:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 88,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78056.54247968948,
+      "exit_price": 78134.88367806927,
+      "pnl_usd": 0.783412,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 02:56:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 89,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78330.48209355545,
+      "exit_price": 78405.9584434579,
+      "pnl_usd": 0.754763,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:00:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 90,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78586.75614424971,
+      "exit_price": 78649.91735021907,
+      "pnl_usd": 0.631612,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:03:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 91,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78730.66126472868,
+      "exit_price": 78797.53930844893,
+      "pnl_usd": 0.66878,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:04:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 92,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78798.20277529063,
+      "exit_price": 78862.82423388702,
+      "pnl_usd": 0.646215,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:05:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 93,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79040.60447872862,
+      "exit_price": 78898.8094320532,
+      "pnl_usd": -1.41795,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:07:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 94,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78876.17612313684,
+      "exit_price": 78737.17110014573,
+      "pnl_usd": -1.39005,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:08:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 95,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78660.64081231067,
+      "exit_price": 78731.4495352176,
+      "pnl_usd": 0.708087,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:09:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 96,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78920.79617187241,
+      "exit_price": 78998.77643095706,
+      "pnl_usd": 0.779803,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:10:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 97,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79193.33180433334,
+      "exit_price": 79269.3358176912,
+      "pnl_usd": 0.76004,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:13:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 98,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79335.8078895308,
+      "exit_price": 79159.9298615965,
+      "pnl_usd": -1.75878,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:14:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 99,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79160.34547900298,
+      "exit_price": 78983.40263855272,
+      "pnl_usd": -1.769428,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:15:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 100,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79018.81834505964,
+      "exit_price": 79113.0013206403,
+      "pnl_usd": 0.94183,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:16:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 101,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79120.55362630908,
+      "exit_price": 79218.21908595732,
+      "pnl_usd": 0.976655,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:21:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 102,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79307.7978724651,
+      "exit_price": 79397.71355448027,
+      "pnl_usd": 0.899157,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:23:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 103,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79424.39040576848,
+      "exit_price": 79269.88231724699,
+      "pnl_usd": -1.545081,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:24:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 104,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79099.38982952805,
+      "exit_price": 78940.18473203597,
+      "pnl_usd": -1.592051,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:26:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 105,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78958.41042184581,
+      "exit_price": 78792.9520055456,
+      "pnl_usd": -1.654584,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:27:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 106,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78766.1737339164,
+      "exit_price": 78607.42960022182,
+      "pnl_usd": -1.587441,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:28:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 107,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78627.95774035007,
+      "exit_price": 78706.46958468232,
+      "pnl_usd": 0.785118,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:30:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 108,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78719.49919216408,
+      "exit_price": 78577.025227904,
+      "pnl_usd": -1.42474,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:31:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 109,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78510.94999166115,
+      "exit_price": 78359.28280876706,
+      "pnl_usd": -1.516672,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:34:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 110,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78388.37852975499,
+      "exit_price": 78465.90209566466,
+      "pnl_usd": 0.775236,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:35:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 111,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78545.74539783537,
+      "exit_price": 78622.2856114957,
+      "pnl_usd": 0.765402,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:36:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 112,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78630.32425908158,
+      "exit_price": 78710.02509468299,
+      "pnl_usd": 0.797008,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:37:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 113,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78840.92588543847,
+      "exit_price": 78672.01354793417,
+      "pnl_usd": -1.689123,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:39:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 114,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78706.93960479651,
+      "exit_price": 78784.86889313743,
+      "pnl_usd": 0.779293,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:42:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 115,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78737.67457738979,
+      "exit_price": 78607.98977981615,
+      "pnl_usd": -1.296848,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:43:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 116,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78567.09522816849,
+      "exit_price": 78636.83431159565,
+      "pnl_usd": 0.697391,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:45:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 117,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78617.19270592193,
+      "exit_price": 78679.52534659849,
+      "pnl_usd": 0.623326,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:46:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 118,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79014.02436407076,
+      "exit_price": 79089.2163114703,
+      "pnl_usd": 0.751919,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:47:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 119,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79311.1758139452,
+      "exit_price": 79144.82039774461,
+      "pnl_usd": -1.663554,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:49:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 120,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79130.45313802783,
+      "exit_price": 78973.75223792177,
+      "pnl_usd": -1.567009,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:50:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 121,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78899.18609154277,
+      "exit_price": 78981.35437814913,
+      "pnl_usd": 0.821683,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 03:53:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 122,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79046.19396595379,
+      "exit_price": 78886.44686983612,
+      "pnl_usd": -1.597471,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:55:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 123,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78827.81799180905,
+      "exit_price": 78658.75972230517,
+      "pnl_usd": -1.690583,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:56:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 124,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78490.01166120413,
+      "exit_price": 78305.1492036084,
+      "pnl_usd": -1.848625,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 03:58:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 125,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78297.9339287952,
+      "exit_price": 78115.08478438311,
+      "pnl_usd": -1.828491,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:00:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 126,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78078.02253405243,
+      "exit_price": 77907.01876194835,
+      "pnl_usd": -1.710038,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:02:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 127,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 77789.35788682451,
+      "exit_price": 77622.64619640875,
+      "pnl_usd": -1.667117,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:03:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 128,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 77561.45138421754,
+      "exit_price": 77651.25730747676,
+      "pnl_usd": 0.898059,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:04:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 129,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 77892.45065597392,
+      "exit_price": 77706.98812156515,
+      "pnl_usd": -1.854625,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:05:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 130,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 77692.14764149183,
+      "exit_price": 77787.21983733363,
+      "pnl_usd": 0.950722,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:07:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 131,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 77807.2370612825,
+      "exit_price": 77910.25229708101,
+      "pnl_usd": 1.030152,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:08:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 132,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78260.62340345439,
+      "exit_price": 78030.3181095541,
+      "pnl_usd": -2.303053,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:09:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 133,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78077.46300240692,
+      "exit_price": 78196.53003646476,
+      "pnl_usd": 1.19067,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:12:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 134,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78343.69221451375,
+      "exit_price": 78113.22762074748,
+      "pnl_usd": -2.304646,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:19:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 135,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78045.78530234256,
+      "exit_price": 78138.70336016732,
+      "pnl_usd": 0.929181,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:25:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 136,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78148.33231401017,
+      "exit_price": 78214.35998778872,
+      "pnl_usd": 0.660277,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:27:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 137,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78227.64397184538,
+      "exit_price": 78280.6815007012,
+      "pnl_usd": 0.530375,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:28:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 138,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78235.96084913508,
+      "exit_price": 78288.19123514812,
+      "pnl_usd": 0.522304,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:29:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 139,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78235.9740542854,
+      "exit_price": 78137.01659865097,
+      "pnl_usd": -0.989575,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:30:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 140,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78123.15189042238,
+      "exit_price": 78175.08413527772,
+      "pnl_usd": 0.519322,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:31:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 141,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78172.61860325577,
+      "exit_price": 78226.31347849907,
+      "pnl_usd": 0.536949,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:33:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 142,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78485.28884035193,
+      "exit_price": 78541.98076578174,
+      "pnl_usd": 0.566919,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:34:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 143,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78732.64824831921,
+      "exit_price": 78795.05850035277,
+      "pnl_usd": 0.624103,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:35:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 144,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78793.42913920063,
+      "exit_price": 78666.93556740943,
+      "pnl_usd": -1.264936,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:36:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 145,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78673.27306012112,
+      "exit_price": 78541.1598583772,
+      "pnl_usd": -1.321132,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:37:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 146,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78498.43352276603,
+      "exit_price": 78569.29079900356,
+      "pnl_usd": 0.708573,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:38:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 147,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78685.66216213074,
+      "exit_price": 78760.19083451552,
+      "pnl_usd": 0.745287,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:39:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 148,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78727.02222202922,
+      "exit_price": 78796.72303682248,
+      "pnl_usd": 0.697008,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:40:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 149,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78802.65905351969,
+      "exit_price": 78660.27833574587,
+      "pnl_usd": -1.423807,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:41:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 150,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78528.18215109935,
+      "exit_price": 78609.47731549361,
+      "pnl_usd": 0.812952,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:42:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 151,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78673.97744148801,
+      "exit_price": 78760.30848846538,
+      "pnl_usd": 0.86331,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:43:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 152,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78745.51205422226,
+      "exit_price": 78571.58322381016,
+      "pnl_usd": -1.739288,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:44:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 153,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78570.82324015212,
+      "exit_price": 78657.93786526767,
+      "pnl_usd": 0.871146,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:52:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 154,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78699.95460573399,
+      "exit_price": 78576.53129450062,
+      "pnl_usd": -1.234233,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:53:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 155,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78296.99793714624,
+      "exit_price": 78372.76939808378,
+      "pnl_usd": 0.757715,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 04:56:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 156,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78333.9089724159,
+      "exit_price": 78213.45607562436,
+      "pnl_usd": -1.204529,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 04:58:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 157,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78001.12902821052,
+      "exit_price": 78065.64124601512,
+      "pnl_usd": 0.645122,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:00:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 158,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78322.4275252137,
+      "exit_price": 78177.81760980425,
+      "pnl_usd": -1.446099,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:01:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 159,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78082.52419437589,
+      "exit_price": 78165.72451682821,
+      "pnl_usd": 0.832003,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:02:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 160,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78217.54053524917,
+      "exit_price": 78049.42770849778,
+      "pnl_usd": -1.681128,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:05:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 161,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 77992.16943254117,
+      "exit_price": 78084.59449777755,
+      "pnl_usd": 0.924251,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:07:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 162,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78142.93163159514,
+      "exit_price": 78221.24277510903,
+      "pnl_usd": 0.783111,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:08:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 163,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78234.04548672866,
+      "exit_price": 78313.82642007552,
+      "pnl_usd": 0.797809,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:09:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 164,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78505.56706497615,
+      "exit_price": 78593.99623999874,
+      "pnl_usd": 0.884292,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:10:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 165,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78690.65167629694,
+      "exit_price": 78782.37816707378,
+      "pnl_usd": 0.917265,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:11:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 166,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78759.78606165634,
+      "exit_price": 78851.78969491587,
+      "pnl_usd": 0.920036,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:12:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 167,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79034.96950496473,
+      "exit_price": 79125.7410124309,
+      "pnl_usd": 0.907715,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:14:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 168,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79235.49512231666,
+      "exit_price": 79061.84991556135,
+      "pnl_usd": -1.736452,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:19:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 169,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79058.81205262682,
+      "exit_price": 79138.51421792088,
+      "pnl_usd": 0.797022,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:20:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 170,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79182.61225986415,
+      "exit_price": 79264.16693406296,
+      "pnl_usd": 0.815547,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:22:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 171,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79338.05694988572,
+      "exit_price": 79417.40259898649,
+      "pnl_usd": 0.793456,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:23:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 172,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79457.29143013075,
+      "exit_price": 79533.89700021851,
+      "pnl_usd": 0.766056,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:24:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 173,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79747.14605725711,
+      "exit_price": 79829.86082032183,
+      "pnl_usd": 0.827148,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:25:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 174,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79863.78566582632,
+      "exit_price": 79696.5054089599,
+      "pnl_usd": -1.672803,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:26:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 175,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79613.08181682044,
+      "exit_price": 79447.43100880357,
+      "pnl_usd": -1.656508,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:28:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 176,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79416.05112496238,
+      "exit_price": 79499.58531987753,
+      "pnl_usd": 0.835342,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:30:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 177,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79573.9199408176,
+      "exit_price": 79666.21159820892,
+      "pnl_usd": 0.922917,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:31:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 178,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79675.44678271274,
+      "exit_price": 79488.1158278065,
+      "pnl_usd": -1.87331,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:33:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 179,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79403.00169506739,
+      "exit_price": 79221.60341252928,
+      "pnl_usd": -1.813983,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:35:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 180,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79215.23299718583,
+      "exit_price": 79309.17954617961,
+      "pnl_usd": 0.939465,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:38:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 181,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79341.47284363367,
+      "exit_price": 79424.25969706992,
+      "pnl_usd": 0.827869,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:39:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 182,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79438.13173753743,
+      "exit_price": 79273.11516907388,
+      "pnl_usd": -1.650166,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:40:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 183,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79074.93305081056,
+      "exit_price": 79162.16920713343,
+      "pnl_usd": 0.872362,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:42:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 184,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79134.48312006581,
+      "exit_price": 79217.11674390906,
+      "pnl_usd": 0.826336,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:44:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 185,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79456.43810171692,
+      "exit_price": 79295.49223573203,
+      "pnl_usd": -1.609459,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:45:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 186,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79129.2385278327,
+      "exit_price": 78950.08861156696,
+      "pnl_usd": -1.791499,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 05:48:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 187,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78879.3021693901,
+      "exit_price": 78975.5706776415,
+      "pnl_usd": 0.962685,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:49:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 188,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79112.48983507205,
+      "exit_price": 79208.93307774633,
+      "pnl_usd": 0.964432,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:51:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 189,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79304.95752869273,
+      "exit_price": 79401.24148871713,
+      "pnl_usd": 0.96284,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:54:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 190,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79513.21434155644,
+      "exit_price": 79598.4979524955,
+      "pnl_usd": 0.852836,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 05:56:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 191,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79587.55877243746,
+      "exit_price": 79587.55877243746,
+      "pnl_usd": 0.0,
+      "r_multiple": 0.0,
+      "ts": "2024-01-01 06:03:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 192,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79497.13961983685,
+      "exit_price": 79552.63912289529,
+      "pnl_usd": 0.554995,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:05:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 193,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79713.09966198377,
+      "exit_price": 79596.0012441098,
+      "pnl_usd": -1.170984,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:06:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 194,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79594.64032360473,
+      "exit_price": 79475.99641130431,
+      "pnl_usd": -1.186439,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:07:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 195,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79463.85450295797,
+      "exit_price": 79525.08049533983,
+      "pnl_usd": 0.61226,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:09:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 196,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79630.37700323982,
+      "exit_price": 79691.26621796319,
+      "pnl_usd": 0.608892,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:11:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 197,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79844.13438066107,
+      "exit_price": 79912.62824037846,
+      "pnl_usd": 0.684939,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:12:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 198,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79981.07162191816,
+      "exit_price": 80050.00167101195,
+      "pnl_usd": 0.6893,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:13:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 199,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80115.84438662531,
+      "exit_price": 80188.37154792043,
+      "pnl_usd": 0.725272,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:14:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 200,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80204.68062594347,
+      "exit_price": 80281.1610608989,
+      "pnl_usd": 0.764804,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:15:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 201,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80578.92841612769,
+      "exit_price": 80402.04746708028,
+      "pnl_usd": -1.768809,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:17:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 202,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80223.76665695554,
+      "exit_price": 80312.93760830146,
+      "pnl_usd": 0.89171,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:18:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 203,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80481.5786869716,
+      "exit_price": 80578.58272854536,
+      "pnl_usd": 0.97004,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:21:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 204,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80636.2084869981,
+      "exit_price": 80454.73316613841,
+      "pnl_usd": -1.814753,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:22:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 205,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80378.22180059248,
+      "exit_price": 80182.60468171726,
+      "pnl_usd": -1.956171,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:23:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 206,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 80177.26308017403,
+      "exit_price": 79976.55020854269,
+      "pnl_usd": -2.007129,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:24:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 207,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79920.90164034515,
+      "exit_price": 80030.36383243662,
+      "pnl_usd": 1.094622,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:28:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 208,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79992.21686384363,
+      "exit_price": 79789.31555060374,
+      "pnl_usd": -2.029013,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:29:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 209,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79766.51532750957,
+      "exit_price": 79577.25193068874,
+      "pnl_usd": -1.892634,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:30:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 210,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79398.82757594003,
+      "exit_price": 79505.5632331187,
+      "pnl_usd": 1.067357,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:34:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 211,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79517.04776737456,
+      "exit_price": 79609.2538493171,
+      "pnl_usd": 0.922061,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:36:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 212,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79660.04837583803,
+      "exit_price": 79743.1067322294,
+      "pnl_usd": 0.830584,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:38:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 213,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79781.10820889148,
+      "exit_price": 79640.66371796529,
+      "pnl_usd": -1.404445,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:39:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 214,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79668.74817692595,
+      "exit_price": 79740.3249315509,
+      "pnl_usd": 0.715768,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:42:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 215,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79802.3359818158,
+      "exit_price": 79869.72371428055,
+      "pnl_usd": 0.673877,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:47:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 216,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79893.93202859221,
+      "exit_price": 79787.37325304364,
+      "pnl_usd": -1.065588,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:48:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 217,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79576.0990501199,
+      "exit_price": 79455.6665535966,
+      "pnl_usd": -1.204325,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:49:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 218,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79370.02990772789,
+      "exit_price": 79241.69453389077,
+      "pnl_usd": -1.283354,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:50:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 219,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79135.0960965844,
+      "exit_price": 78999.36298164097,
+      "pnl_usd": -1.357331,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:51:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 220,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78766.61478760063,
+      "exit_price": 78603.35258124744,
+      "pnl_usd": -1.632622,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 06:52:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 221,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78659.83803908248,
+      "exit_price": 78743.78368622722,
+      "pnl_usd": 0.839456,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:53:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 222,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78777.82714037238,
+      "exit_price": 78860.84336982305,
+      "pnl_usd": 0.830162,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:56:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 223,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78935.87569728633,
+      "exit_price": 79024.55093134608,
+      "pnl_usd": 0.886752,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:57:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 224,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79145.75836727649,
+      "exit_price": 79239.71598371163,
+      "pnl_usd": 0.939576,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 06:59:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 225,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79349.33695636255,
+      "exit_price": 79149.73409016637,
+      "pnl_usd": -1.996029,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:02:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 226,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79137.01736517454,
+      "exit_price": 78955.46199123499,
+      "pnl_usd": -1.815554,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:03:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 227,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78903.03347042811,
+      "exit_price": 78716.9904297774,
+      "pnl_usd": -1.86043,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:05:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 228,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78706.62820680016,
+      "exit_price": 78783.55347461914,
+      "pnl_usd": 0.769253,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:06:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 229,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78833.22484541815,
+      "exit_price": 78908.8945094239,
+      "pnl_usd": 0.756697,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:07:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 230,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79104.99990951801,
+      "exit_price": 78943.2572976747,
+      "pnl_usd": -1.617426,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:08:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 231,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78886.62694236074,
+      "exit_price": 78886.62694236074,
+      "pnl_usd": 0.0,
+      "r_multiple": 0.0,
+      "ts": "2024-01-01 07:10:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 232,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78784.5007702382,
+      "exit_price": 78868.14572390159,
+      "pnl_usd": 0.83645,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:11:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 233,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78859.33383391806,
+      "exit_price": 78701.92412305674,
+      "pnl_usd": -1.574097,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:13:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 234,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78550.49732572996,
+      "exit_price": 78631.025118725,
+      "pnl_usd": 0.805278,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:14:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 235,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78696.46916973127,
+      "exit_price": 78526.06230081359,
+      "pnl_usd": -1.704069,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:16:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 236,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78517.41820128074,
+      "exit_price": 78350.66033035754,
+      "pnl_usd": -1.667579,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:17:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 237,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78349.60938428104,
+      "exit_price": 78432.78588362345,
+      "pnl_usd": 0.831765,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:23:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 238,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78600.03933940144,
+      "exit_price": 78452.49011583668,
+      "pnl_usd": -1.475492,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:25:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 239,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78314.51103949644,
+      "exit_price": 78389.54389779888,
+      "pnl_usd": 0.750329,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:26:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 240,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78481.84756470565,
+      "exit_price": 78560.46456582856,
+      "pnl_usd": 0.78617,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:28:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 241,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78604.86281360629,
+      "exit_price": 78678.26251330454,
+      "pnl_usd": 0.733997,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:29:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 242,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78665.156536661,
+      "exit_price": 78742.31874926077,
+      "pnl_usd": 0.771622,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:32:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 243,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79007.09206823622,
+      "exit_price": 79082.24591044053,
+      "pnl_usd": 0.751538,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:33:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 244,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79335.96704602189,
+      "exit_price": 79420.90968507272,
+      "pnl_usd": 0.849426,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:35:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 245,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79372.40199998317,
+      "exit_price": 79458.21724074853,
+      "pnl_usd": 0.858152,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:36:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 246,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79543.4335378114,
+      "exit_price": 79363.6371671551,
+      "pnl_usd": -1.797964,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:41:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 247,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79375.31121928604,
+      "exit_price": 79223.88423771657,
+      "pnl_usd": -1.51427,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:42:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 248,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79123.36708471936,
+      "exit_price": 78965.10850792644,
+      "pnl_usd": -1.582586,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:43:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 249,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78796.00331458174,
+      "exit_price": 78627.62473349902,
+      "pnl_usd": -1.683786,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:44:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 250,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78620.10912461765,
+      "exit_price": 78709.09065167898,
+      "pnl_usd": 0.889815,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:47:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 251,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78806.71717553408,
+      "exit_price": 78886.0559850279,
+      "pnl_usd": 0.793388,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:48:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 252,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78981.22952728295,
+      "exit_price": 78813.65504846832,
+      "pnl_usd": -1.675745,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:49:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 253,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78829.40136807927,
+      "exit_price": 78829.40136807927,
+      "pnl_usd": 0.0,
+      "r_multiple": 0.0,
+      "ts": "2024-01-01 07:51:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 254,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78820.04175472021,
+      "exit_price": 78903.39702820624,
+      "pnl_usd": 0.833553,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:54:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 255,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78902.07821544798,
+      "exit_price": 78988.29798779372,
+      "pnl_usd": 0.862198,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:56:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 256,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79016.50490303391,
+      "exit_price": 78856.59115725111,
+      "pnl_usd": -1.599137,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 07:57:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 257,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 78836.24689001318,
+      "exit_price": 78912.35449108435,
+      "pnl_usd": 0.761076,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 07:59:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 258,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79247.89909744136,
+      "exit_price": 79331.54469201379,
+      "pnl_usd": 0.836456,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:01:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 259,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79510.85006023437,
+      "exit_price": 79591.34023376169,
+      "pnl_usd": 0.804902,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:03:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 260,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79617.83182308266,
+      "exit_price": 79477.3603990307,
+      "pnl_usd": -1.404714,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 08:06:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 261,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79457.69481214609,
+      "exit_price": 79529.50814158471,
+      "pnl_usd": 0.718133,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:07:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 262,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79526.10575335936,
+      "exit_price": 79384.75017211647,
+      "pnl_usd": -1.413556,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 08:08:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 263,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79390.78214603178,
+      "exit_price": 79461.86248355547,
+      "pnl_usd": 0.710803,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:09:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 264,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79496.53518306714,
+      "exit_price": 79569.93718616007,
+      "pnl_usd": 0.73402,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:10:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 265,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79669.27570135142,
+      "exit_price": 79742.52877274854,
+      "pnl_usd": 0.732531,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:11:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 266,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79727.699696437,
+      "exit_price": 79796.65626486679,
+      "pnl_usd": 0.689566,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:13:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 267,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79754.44753887443,
+      "exit_price": 79813.4617330372,
+      "pnl_usd": 0.590142,
+      "r_multiple": 0.5,
+      "ts": "2024-01-01 08:15:00",
+      "reason": "tp_final_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 268,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79854.50223771013,
+      "exit_price": 79744.72397869159,
+      "pnl_usd": -1.097783,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 08:16:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 269,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79562.54521349295,
+      "exit_price": 79432.68706314759,
+      "pnl_usd": -1.298582,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 08:18:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    },
+    {
+      "kind": "exit",
+      "cohort_id": 270,
+      "side": "buy",
+      "qty": 0.01,
+      "entry_price": 79193.21340890981,
+      "exit_price": 79043.66377006574,
+      "pnl_usd": -1.495496,
+      "r_multiple": -1.0,
+      "ts": "2024-01-01 08:19:00",
+      "reason": "sl_hit_intrabar",
+      "hold_seconds": 0
+    }
+  ],
+  "equity_curve": [
+    [
+      "2024-01-01 00:00:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:01:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:02:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:03:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:04:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:05:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:06:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:07:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:08:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:09:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:10:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:11:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:12:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:13:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:14:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:15:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:16:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:17:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:18:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:19:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:20:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:21:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:22:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:23:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:24:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:25:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:26:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:27:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:28:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:29:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:30:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:31:00",
+      0.0
+    ],
+    [
+      "2024-01-01 00:32:00",
+      -1.357202
+    ],
+    [
+      "2024-01-01 00:33:00",
+      -2.597048
+    ],
+    [
+      "2024-01-01 00:34:00",
+      -1.955638
+    ],
+    [
+      "2024-01-01 00:35:00",
+      -1.275191
+    ],
+    [
+      "2024-01-01 00:36:00",
+      -1.275191
+    ],
+    [
+      "2024-01-01 00:37:00",
+      -2.697325
+    ],
+    [
+      "2024-01-01 00:38:00",
+      -4.062826
+    ],
+    [
+      "2024-01-01 00:39:00",
+      -3.375814
+    ],
+    [
+      "2024-01-01 00:40:00",
+      -2.665536
+    ],
+    [
+      "2024-01-01 00:41:00",
+      -1.940283
+    ],
+    [
+      "2024-01-01 00:42:00",
+      -1.940283
+    ],
+    [
+      "2024-01-01 00:43:00",
+      -1.940283
+    ],
+    [
+      "2024-01-01 00:44:00",
+      -1.940283
+    ],
+    [
+      "2024-01-01 00:45:00",
+      -1.940283
+    ],
+    [
+      "2024-01-01 00:46:00",
+      -1.194701
+    ],
+    [
+      "2024-01-01 00:47:00",
+      -0.567555
+    ],
+    [
+      "2024-01-01 00:48:00",
+      0.033413
+    ],
+    [
+      "2024-01-01 00:49:00",
+      0.033413
+    ],
+    [
+      "2024-01-01 00:50:00",
+      0.625966
+    ],
+    [
+      "2024-01-01 00:51:00",
+      1.162013
+    ],
+    [
+      "2024-01-01 00:52:00",
+      0.113365
+    ],
+    [
+      "2024-01-01 00:53:00",
+      -0.989035
+    ],
+    [
+      "2024-01-01 00:54:00",
+      -2.123316
+    ],
+    [
+      "2024-01-01 00:55:00",
+      -3.217665
+    ],
+    [
+      "2024-01-01 00:56:00",
+      -3.217665
+    ],
+    [
+      "2024-01-01 00:57:00",
+      -2.655698
+    ],
+    [
+      "2024-01-01 00:58:00",
+      -3.888873
+    ],
+    [
+      "2024-01-01 00:59:00",
+      -3.235356
+    ],
+    [
+      "2024-01-01 01:00:00",
+      -4.649711
+    ],
+    [
+      "2024-01-01 01:01:00",
+      -4.649711
+    ],
+    [
+      "2024-01-01 01:02:00",
+      -4.649711
+    ],
+    [
+      "2024-01-01 01:03:00",
+      -3.896608
+    ],
+    [
+      "2024-01-01 01:04:00",
+      -3.141275
+    ],
+    [
+      "2024-01-01 01:05:00",
+      -2.355576
+    ],
+    [
+      "2024-01-01 01:06:00",
+      -2.355576
+    ],
+    [
+      "2024-01-01 01:07:00",
+      -2.355576
+    ],
+    [
+      "2024-01-01 01:08:00",
+      -2.355576
+    ],
+    [
+      "2024-01-01 01:09:00",
+      -2.355576
+    ],
+    [
+      "2024-01-01 01:10:00",
+      -3.950656
+    ],
+    [
+      "2024-01-01 01:11:00",
+      -5.428787
+    ],
+    [
+      "2024-01-01 01:12:00",
+      -6.867326
+    ],
+    [
+      "2024-01-01 01:13:00",
+      -6.143629
+    ],
+    [
+      "2024-01-01 01:14:00",
+      -6.143629
+    ],
+    [
+      "2024-01-01 01:15:00",
+      -5.447095
+    ],
+    [
+      "2024-01-01 01:16:00",
+      -5.447095
+    ],
+    [
+      "2024-01-01 01:17:00",
+      -6.714603
+    ],
+    [
+      "2024-01-01 01:18:00",
+      -6.034004
+    ],
+    [
+      "2024-01-01 01:19:00",
+      -6.034004
+    ],
+    [
+      "2024-01-01 01:20:00",
+      -5.367718
+    ],
+    [
+      "2024-01-01 01:21:00",
+      -5.367718
+    ],
+    [
+      "2024-01-01 01:22:00",
+      -6.714934
+    ],
+    [
+      "2024-01-01 01:23:00",
+      -6.714934
+    ],
+    [
+      "2024-01-01 01:24:00",
+      -8.01559
+    ],
+    [
+      "2024-01-01 01:25:00",
+      -7.360878
+    ],
+    [
+      "2024-01-01 01:26:00",
+      -8.621054
+    ],
+    [
+      "2024-01-01 01:27:00",
+      -8.621054
+    ],
+    [
+      "2024-01-01 01:28:00",
+      -8.000104
+    ],
+    [
+      "2024-01-01 01:29:00",
+      -7.371435
+    ],
+    [
+      "2024-01-01 01:30:00",
+      -6.754615
+    ],
+    [
+      "2024-01-01 01:31:00",
+      -6.754615
+    ],
+    [
+      "2024-01-01 01:32:00",
+      -6.754615
+    ],
+    [
+      "2024-01-01 01:33:00",
+      -6.754615
+    ],
+    [
+      "2024-01-01 01:34:00",
+      -8.012704
+    ],
+    [
+      "2024-01-01 01:35:00",
+      -9.227564
+    ],
+    [
+      "2024-01-01 01:36:00",
+      -10.561886
+    ],
+    [
+      "2024-01-01 01:37:00",
+      -12.037286
+    ],
+    [
+      "2024-01-01 01:38:00",
+      -12.037286
+    ],
+    [
+      "2024-01-01 01:39:00",
+      -12.037286
+    ],
+    [
+      "2024-01-01 01:40:00",
+      -12.037286
+    ],
+    [
+      "2024-01-01 01:41:00",
+      -11.290277
+    ],
+    [
+      "2024-01-01 01:42:00",
+      -11.290277
+    ],
+    [
+      "2024-01-01 01:43:00",
+      -10.505004
+    ],
+    [
+      "2024-01-01 01:44:00",
+      -12.075355
+    ],
+    [
+      "2024-01-01 01:45:00",
+      -12.075355
+    ],
+    [
+      "2024-01-01 01:46:00",
+      -13.671318
+    ],
+    [
+      "2024-01-01 01:47:00",
+      -13.671318
+    ],
+    [
+      "2024-01-01 01:48:00",
+      -12.822156
+    ],
+    [
+      "2024-01-01 01:49:00",
+      -14.459748
+    ],
+    [
+      "2024-01-01 01:50:00",
+      -13.631514
+    ],
+    [
+      "2024-01-01 01:51:00",
+      -13.631514
+    ],
+    [
+      "2024-01-01 01:52:00",
+      -13.631514
+    ],
+    [
+      "2024-01-01 01:53:00",
+      -15.171015
+    ],
+    [
+      "2024-01-01 01:54:00",
+      -15.171015
+    ],
+    [
+      "2024-01-01 01:55:00",
+      -15.171015
+    ],
+    [
+      "2024-01-01 01:56:00",
+      -15.171015
+    ],
+    [
+      "2024-01-01 01:57:00",
+      -15.171015
+    ],
+    [
+      "2024-01-01 01:58:00",
+      -14.408489
+    ],
+    [
+      "2024-01-01 01:59:00",
+      -14.408489
+    ],
+    [
+      "2024-01-01 02:00:00",
+      -15.75861
+    ],
+    [
+      "2024-01-01 02:01:00",
+      -15.75861
+    ],
+    [
+      "2024-01-01 02:02:00",
+      -15.079682
+    ],
+    [
+      "2024-01-01 02:03:00",
+      -14.475721
+    ],
+    [
+      "2024-01-01 02:04:00",
+      -13.895791
+    ],
+    [
+      "2024-01-01 02:05:00",
+      -13.301134
+    ],
+    [
+      "2024-01-01 02:06:00",
+      -12.695496
+    ],
+    [
+      "2024-01-01 02:07:00",
+      -13.98468
+    ],
+    [
+      "2024-01-01 02:08:00",
+      -13.98468
+    ],
+    [
+      "2024-01-01 02:09:00",
+      -15.241804
+    ],
+    [
+      "2024-01-01 02:10:00",
+      -15.241804
+    ],
+    [
+      "2024-01-01 02:11:00",
+      -16.649421
+    ],
+    [
+      "2024-01-01 02:12:00",
+      -15.863567
+    ],
+    [
+      "2024-01-01 02:13:00",
+      -15.863567
+    ],
+    [
+      "2024-01-01 02:14:00",
+      -17.320583
+    ],
+    [
+      "2024-01-01 02:15:00",
+      -18.844202
+    ],
+    [
+      "2024-01-01 02:16:00",
+      -18.844202
+    ],
+    [
+      "2024-01-01 02:17:00",
+      -18.018006
+    ],
+    [
+      "2024-01-01 02:18:00",
+      -17.210468
+    ],
+    [
+      "2024-01-01 02:19:00",
+      -16.336348
+    ],
+    [
+      "2024-01-01 02:20:00",
+      -15.31794
+    ],
+    [
+      "2024-01-01 02:21:00",
+      -17.268458
+    ],
+    [
+      "2024-01-01 02:22:00",
+      -19.25924
+    ],
+    [
+      "2024-01-01 02:23:00",
+      -19.25924
+    ],
+    [
+      "2024-01-01 02:24:00",
+      -19.25924
+    ],
+    [
+      "2024-01-01 02:25:00",
+      -19.25924
+    ],
+    [
+      "2024-01-01 02:26:00",
+      -21.467921
+    ],
+    [
+      "2024-01-01 02:27:00",
+      -21.467921
+    ],
+    [
+      "2024-01-01 02:28:00",
+      -20.465712
+    ],
+    [
+      "2024-01-01 02:29:00",
+      -20.465712
+    ],
+    [
+      "2024-01-01 02:30:00",
+      -20.465712
+    ],
+    [
+      "2024-01-01 02:31:00",
+      -22.390817
+    ],
+    [
+      "2024-01-01 02:32:00",
+      -24.241092
+    ],
+    [
+      "2024-01-01 02:33:00",
+      -24.241092
+    ],
+    [
+      "2024-01-01 02:34:00",
+      -24.241092
+    ],
+    [
+      "2024-01-01 02:35:00",
+      -23.338647
+    ],
+    [
+      "2024-01-01 02:36:00",
+      -23.338647
+    ],
+    [
+      "2024-01-01 02:37:00",
+      -22.586102
+    ],
+    [
+      "2024-01-01 02:38:00",
+      -23.913433
+    ],
+    [
+      "2024-01-01 02:39:00",
+      -25.273728
+    ],
+    [
+      "2024-01-01 02:40:00",
+      -26.74056
+    ],
+    [
+      "2024-01-01 02:41:00",
+      -26.74056
+    ],
+    [
+      "2024-01-01 02:42:00",
+      -25.977559
+    ],
+    [
+      "2024-01-01 02:43:00",
+      -27.67448
+    ],
+    [
+      "2024-01-01 02:44:00",
+      -26.778882
+    ],
+    [
+      "2024-01-01 02:45:00",
+      -26.778882
+    ],
+    [
+      "2024-01-01 02:46:00",
+      -26.778882
+    ],
+    [
+      "2024-01-01 02:47:00",
+      -26.778882
+    ],
+    [
+      "2024-01-01 02:48:00",
+      -26.778882
+    ],
+    [
+      "2024-01-01 02:49:00",
+      -25.863734
+    ],
+    [
+      "2024-01-01 02:50:00",
+      -25.863734
+    ],
+    [
+      "2024-01-01 02:51:00",
+      -25.863734
+    ],
+    [
+      "2024-01-01 02:52:00",
+      -25.863734
+    ],
+    [
+      "2024-01-01 02:53:00",
+      -27.492616
+    ],
+    [
+      "2024-01-01 02:54:00",
+      -29.055638
+    ],
+    [
+      "2024-01-01 02:55:00",
+      -29.055638
+    ],
+    [
+      "2024-01-01 02:56:00",
+      -28.272226
+    ],
+    [
+      "2024-01-01 02:57:00",
+      -28.272226
+    ],
+    [
+      "2024-01-01 02:58:00",
+      -28.272226
+    ],
+    [
+      "2024-01-01 02:59:00",
+      -28.272226
+    ],
+    [
+      "2024-01-01 03:00:00",
+      -27.517463
+    ],
+    [
+      "2024-01-01 03:01:00",
+      -27.517463
+    ],
+    [
+      "2024-01-01 03:02:00",
+      -27.517463
+    ],
+    [
+      "2024-01-01 03:03:00",
+      -26.88585
+    ],
+    [
+      "2024-01-01 03:04:00",
+      -26.21707
+    ],
+    [
+      "2024-01-01 03:05:00",
+      -25.570855
+    ],
+    [
+      "2024-01-01 03:06:00",
+      -25.570855
+    ],
+    [
+      "2024-01-01 03:07:00",
+      -26.988806
+    ],
+    [
+      "2024-01-01 03:08:00",
+      -28.378856
+    ],
+    [
+      "2024-01-01 03:09:00",
+      -27.670769
+    ],
+    [
+      "2024-01-01 03:10:00",
+      -26.890966
+    ],
+    [
+      "2024-01-01 03:11:00",
+      -26.890966
+    ],
+    [
+      "2024-01-01 03:12:00",
+      -26.890966
+    ],
+    [
+      "2024-01-01 03:13:00",
+      -26.130926
+    ],
+    [
+      "2024-01-01 03:14:00",
+      -27.889706
+    ],
+    [
+      "2024-01-01 03:15:00",
+      -29.659135
+    ],
+    [
+      "2024-01-01 03:16:00",
+      -28.717305
+    ],
+    [
+      "2024-01-01 03:17:00",
+      -28.717305
+    ],
+    [
+      "2024-01-01 03:18:00",
+      -28.717305
+    ],
+    [
+      "2024-01-01 03:19:00",
+      -28.717305
+    ],
+    [
+      "2024-01-01 03:20:00",
+      -28.717305
+    ],
+    [
+      "2024-01-01 03:21:00",
+      -27.740651
+    ],
+    [
+      "2024-01-01 03:22:00",
+      -27.740651
+    ],
+    [
+      "2024-01-01 03:23:00",
+      -26.841494
+    ],
+    [
+      "2024-01-01 03:24:00",
+      -28.386575
+    ],
+    [
+      "2024-01-01 03:25:00",
+      -28.386575
+    ],
+    [
+      "2024-01-01 03:26:00",
+      -29.978626
+    ],
+    [
+      "2024-01-01 03:27:00",
+      -31.63321
+    ],
+    [
+      "2024-01-01 03:28:00",
+      -33.220651
+    ],
+    [
+      "2024-01-01 03:29:00",
+      -33.220651
+    ],
+    [
+      "2024-01-01 03:30:00",
+      -32.435533
+    ],
+    [
+      "2024-01-01 03:31:00",
+      -33.860272
+    ],
+    [
+      "2024-01-01 03:32:00",
+      -33.860272
+    ],
+    [
+      "2024-01-01 03:33:00",
+      -33.860272
+    ],
+    [
+      "2024-01-01 03:34:00",
+      -35.376944
+    ],
+    [
+      "2024-01-01 03:35:00",
+      -34.601708
+    ],
+    [
+      "2024-01-01 03:36:00",
+      -33.836306
+    ],
+    [
+      "2024-01-01 03:37:00",
+      -33.039298
+    ],
+    [
+      "2024-01-01 03:38:00",
+      -33.039298
+    ],
+    [
+      "2024-01-01 03:39:00",
+      -34.728421
+    ],
+    [
+      "2024-01-01 03:40:00",
+      -34.728421
+    ],
+    [
+      "2024-01-01 03:41:00",
+      -34.728421
+    ],
+    [
+      "2024-01-01 03:42:00",
+      -33.949128
+    ],
+    [
+      "2024-01-01 03:43:00",
+      -35.245976
+    ],
+    [
+      "2024-01-01 03:44:00",
+      -35.245976
+    ],
+    [
+      "2024-01-01 03:45:00",
+      -34.548586
+    ],
+    [
+      "2024-01-01 03:46:00",
+      -33.925259
+    ],
+    [
+      "2024-01-01 03:47:00",
+      -33.17334
+    ],
+    [
+      "2024-01-01 03:48:00",
+      -33.17334
+    ],
+    [
+      "2024-01-01 03:49:00",
+      -34.836894
+    ],
+    [
+      "2024-01-01 03:50:00",
+      -36.403903
+    ],
+    [
+      "2024-01-01 03:51:00",
+      -36.403903
+    ],
+    [
+      "2024-01-01 03:52:00",
+      -36.403903
+    ],
+    [
+      "2024-01-01 03:53:00",
+      -35.58222
+    ],
+    [
+      "2024-01-01 03:54:00",
+      -35.58222
+    ],
+    [
+      "2024-01-01 03:55:00",
+      -37.179691
+    ],
+    [
+      "2024-01-01 03:56:00",
+      -38.870274
+    ],
+    [
+      "2024-01-01 03:57:00",
+      -38.870274
+    ],
+    [
+      "2024-01-01 03:58:00",
+      -40.718898
+    ],
+    [
+      "2024-01-01 03:59:00",
+      -40.718898
+    ],
+    [
+      "2024-01-01 04:00:00",
+      -42.54739
+    ],
+    [
+      "2024-01-01 04:01:00",
+      -42.54739
+    ],
+    [
+      "2024-01-01 04:02:00",
+      -44.257427
+    ],
+    [
+      "2024-01-01 04:03:00",
+      -45.924544
+    ],
+    [
+      "2024-01-01 04:04:00",
+      -45.026485
+    ],
+    [
+      "2024-01-01 04:05:00",
+      -46.88111
+    ],
+    [
+      "2024-01-01 04:06:00",
+      -46.88111
+    ],
+    [
+      "2024-01-01 04:07:00",
+      -45.930388
+    ],
+    [
+      "2024-01-01 04:08:00",
+      -44.900236
+    ],
+    [
+      "2024-01-01 04:09:00",
+      -47.203289
+    ],
+    [
+      "2024-01-01 04:10:00",
+      -47.203289
+    ],
+    [
+      "2024-01-01 04:11:00",
+      -47.203289
+    ],
+    [
+      "2024-01-01 04:12:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:13:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:14:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:15:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:16:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:17:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:18:00",
+      -46.012619
+    ],
+    [
+      "2024-01-01 04:19:00",
+      -48.317265
+    ],
+    [
+      "2024-01-01 04:20:00",
+      -48.317265
+    ],
+    [
+      "2024-01-01 04:21:00",
+      -48.317265
+    ],
+    [
+      "2024-01-01 04:22:00",
+      -48.317265
+    ],
+    [
+      "2024-01-01 04:23:00",
+      -48.317265
+    ],
+    [
+      "2024-01-01 04:24:00",
+      -48.317265
+    ],
+    [
+      "2024-01-01 04:25:00",
+      -47.388084
+    ],
+    [
+      "2024-01-01 04:26:00",
+      -47.388084
+    ],
+    [
+      "2024-01-01 04:27:00",
+      -46.727807
+    ],
+    [
+      "2024-01-01 04:28:00",
+      -46.197432
+    ],
+    [
+      "2024-01-01 04:29:00",
+      -45.675128
+    ],
+    [
+      "2024-01-01 04:30:00",
+      -46.664703
+    ],
+    [
+      "2024-01-01 04:31:00",
+      -46.14538
+    ],
+    [
+      "2024-01-01 04:32:00",
+      -46.14538
+    ],
+    [
+      "2024-01-01 04:33:00",
+      -45.608431
+    ],
+    [
+      "2024-01-01 04:34:00",
+      -45.041512
+    ],
+    [
+      "2024-01-01 04:35:00",
+      -44.41741
+    ],
+    [
+      "2024-01-01 04:36:00",
+      -45.682345
+    ],
+    [
+      "2024-01-01 04:37:00",
+      -47.003477
+    ],
+    [
+      "2024-01-01 04:38:00",
+      -46.294905
+    ],
+    [
+      "2024-01-01 04:39:00",
+      -45.549618
+    ],
+    [
+      "2024-01-01 04:40:00",
+      -44.85261
+    ],
+    [
+      "2024-01-01 04:41:00",
+      -46.276417
+    ],
+    [
+      "2024-01-01 04:42:00",
+      -45.463465
+    ],
+    [
+      "2024-01-01 04:43:00",
+      -44.600155
+    ],
+    [
+      "2024-01-01 04:44:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:45:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:46:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:47:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:48:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:49:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:50:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:51:00",
+      -46.339443
+    ],
+    [
+      "2024-01-01 04:52:00",
+      -45.468297
+    ],
+    [
+      "2024-01-01 04:53:00",
+      -46.70253
+    ],
+    [
+      "2024-01-01 04:54:00",
+      -46.70253
+    ],
+    [
+      "2024-01-01 04:55:00",
+      -46.70253
+    ],
+    [
+      "2024-01-01 04:56:00",
+      -45.944815
+    ],
+    [
+      "2024-01-01 04:57:00",
+      -45.944815
+    ],
+    [
+      "2024-01-01 04:58:00",
+      -47.149344
+    ],
+    [
+      "2024-01-01 04:59:00",
+      -47.149344
+    ],
+    [
+      "2024-01-01 05:00:00",
+      -46.504222
+    ],
+    [
+      "2024-01-01 05:01:00",
+      -47.950321
+    ],
+    [
+      "2024-01-01 05:02:00",
+      -47.118318
+    ],
+    [
+      "2024-01-01 05:03:00",
+      -47.118318
+    ],
+    [
+      "2024-01-01 05:04:00",
+      -47.118318
+    ],
+    [
+      "2024-01-01 05:05:00",
+      -48.799446
+    ],
+    [
+      "2024-01-01 05:06:00",
+      -48.799446
+    ],
+    [
+      "2024-01-01 05:07:00",
+      -47.875196
+    ],
+    [
+      "2024-01-01 05:08:00",
+      -47.092084
+    ],
+    [
+      "2024-01-01 05:09:00",
+      -46.294275
+    ],
+    [
+      "2024-01-01 05:10:00",
+      -45.409983
+    ],
+    [
+      "2024-01-01 05:11:00",
+      -44.492718
+    ],
+    [
+      "2024-01-01 05:12:00",
+      -43.572682
+    ],
+    [
+      "2024-01-01 05:13:00",
+      -43.572682
+    ],
+    [
+      "2024-01-01 05:14:00",
+      -42.664967
+    ],
+    [
+      "2024-01-01 05:15:00",
+      -42.664967
+    ],
+    [
+      "2024-01-01 05:16:00",
+      -42.664967
+    ],
+    [
+      "2024-01-01 05:17:00",
+      -42.664967
+    ],
+    [
+      "2024-01-01 05:18:00",
+      -42.664967
+    ],
+    [
+      "2024-01-01 05:19:00",
+      -44.401419
+    ],
+    [
+      "2024-01-01 05:20:00",
+      -43.604397
+    ],
+    [
+      "2024-01-01 05:21:00",
+      -43.604397
+    ],
+    [
+      "2024-01-01 05:22:00",
+      -42.788851
+    ],
+    [
+      "2024-01-01 05:23:00",
+      -41.995394
+    ],
+    [
+      "2024-01-01 05:24:00",
+      -41.229338
+    ],
+    [
+      "2024-01-01 05:25:00",
+      -40.402191
+    ],
+    [
+      "2024-01-01 05:26:00",
+      -42.074993
+    ],
+    [
+      "2024-01-01 05:27:00",
+      -42.074993
+    ],
+    [
+      "2024-01-01 05:28:00",
+      -43.731501
+    ],
+    [
+      "2024-01-01 05:29:00",
+      -43.731501
+    ],
+    [
+      "2024-01-01 05:30:00",
+      -42.896159
+    ],
+    [
+      "2024-01-01 05:31:00",
+      -41.973243
+    ],
+    [
+      "2024-01-01 05:32:00",
+      -41.973243
+    ],
+    [
+      "2024-01-01 05:33:00",
+      -43.846552
+    ],
+    [
+      "2024-01-01 05:34:00",
+      -43.846552
+    ],
+    [
+      "2024-01-01 05:35:00",
+      -45.660535
+    ],
+    [
+      "2024-01-01 05:36:00",
+      -45.660535
+    ],
+    [
+      "2024-01-01 05:37:00",
+      -45.660535
+    ],
+    [
+      "2024-01-01 05:38:00",
+      -44.72107
+    ],
+    [
+      "2024-01-01 05:39:00",
+      -43.893201
+    ],
+    [
+      "2024-01-01 05:40:00",
+      -45.543367
+    ],
+    [
+      "2024-01-01 05:41:00",
+      -45.543367
+    ],
+    [
+      "2024-01-01 05:42:00",
+      -44.671005
+    ],
+    [
+      "2024-01-01 05:43:00",
+      -44.671005
+    ],
+    [
+      "2024-01-01 05:44:00",
+      -43.844669
+    ],
+    [
+      "2024-01-01 05:45:00",
+      -45.454128
+    ],
+    [
+      "2024-01-01 05:46:00",
+      -45.454128
+    ],
+    [
+      "2024-01-01 05:47:00",
+      -45.454128
+    ],
+    [
+      "2024-01-01 05:48:00",
+      -47.245627
+    ],
+    [
+      "2024-01-01 05:49:00",
+      -46.282942
+    ],
+    [
+      "2024-01-01 05:50:00",
+      -46.282942
+    ],
+    [
+      "2024-01-01 05:51:00",
+      -45.318509
+    ],
+    [
+      "2024-01-01 05:52:00",
+      -45.318509
+    ],
+    [
+      "2024-01-01 05:53:00",
+      -45.318509
+    ],
+    [
+      "2024-01-01 05:54:00",
+      -44.35567
+    ],
+    [
+      "2024-01-01 05:55:00",
+      -44.35567
+    ],
+    [
+      "2024-01-01 05:56:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 05:57:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 05:58:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 05:59:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 06:00:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 06:01:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 06:02:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 06:03:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 06:04:00",
+      -43.502834
+    ],
+    [
+      "2024-01-01 06:05:00",
+      -42.947839
+    ],
+    [
+      "2024-01-01 06:06:00",
+      -44.118823
+    ],
+    [
+      "2024-01-01 06:07:00",
+      -45.305262
+    ],
+    [
+      "2024-01-01 06:08:00",
+      -45.305262
+    ],
+    [
+      "2024-01-01 06:09:00",
+      -44.693002
+    ],
+    [
+      "2024-01-01 06:10:00",
+      -44.693002
+    ],
+    [
+      "2024-01-01 06:11:00",
+      -44.08411
+    ],
+    [
+      "2024-01-01 06:12:00",
+      -43.399171
+    ],
+    [
+      "2024-01-01 06:13:00",
+      -42.709871
+    ],
+    [
+      "2024-01-01 06:14:00",
+      -41.984599
+    ],
+    [
+      "2024-01-01 06:15:00",
+      -41.219795
+    ],
+    [
+      "2024-01-01 06:16:00",
+      -41.219795
+    ],
+    [
+      "2024-01-01 06:17:00",
+      -42.988604
+    ],
+    [
+      "2024-01-01 06:18:00",
+      -42.096895
+    ],
+    [
+      "2024-01-01 06:19:00",
+      -42.096895
+    ],
+    [
+      "2024-01-01 06:20:00",
+      -42.096895
+    ],
+    [
+      "2024-01-01 06:21:00",
+      -41.126854
+    ],
+    [
+      "2024-01-01 06:22:00",
+      -42.941608
+    ],
+    [
+      "2024-01-01 06:23:00",
+      -44.897779
+    ],
+    [
+      "2024-01-01 06:24:00",
+      -46.904908
+    ],
+    [
+      "2024-01-01 06:25:00",
+      -46.904908
+    ],
+    [
+      "2024-01-01 06:26:00",
+      -46.904908
+    ],
+    [
+      "2024-01-01 06:27:00",
+      -46.904908
+    ],
+    [
+      "2024-01-01 06:28:00",
+      -45.810286
+    ],
+    [
+      "2024-01-01 06:29:00",
+      -47.839299
+    ],
+    [
+      "2024-01-01 06:30:00",
+      -49.731933
+    ],
+    [
+      "2024-01-01 06:31:00",
+      -49.731933
+    ],
+    [
+      "2024-01-01 06:32:00",
+      -49.731933
+    ],
+    [
+      "2024-01-01 06:33:00",
+      -49.731933
+    ],
+    [
+      "2024-01-01 06:34:00",
+      -48.664576
+    ],
+    [
+      "2024-01-01 06:35:00",
+      -48.664576
+    ],
+    [
+      "2024-01-01 06:36:00",
+      -47.742515
+    ],
+    [
+      "2024-01-01 06:37:00",
+      -47.742515
+    ],
+    [
+      "2024-01-01 06:38:00",
+      -46.911932
+    ],
+    [
+      "2024-01-01 06:39:00",
+      -48.316377
+    ],
+    [
+      "2024-01-01 06:40:00",
+      -48.316377
+    ],
+    [
+      "2024-01-01 06:41:00",
+      -48.316377
+    ],
+    [
+      "2024-01-01 06:42:00",
+      -47.600609
+    ],
+    [
+      "2024-01-01 06:43:00",
+      -47.600609
+    ],
+    [
+      "2024-01-01 06:44:00",
+      -47.600609
+    ],
+    [
+      "2024-01-01 06:45:00",
+      -47.600609
+    ],
+    [
+      "2024-01-01 06:46:00",
+      -47.600609
+    ],
+    [
+      "2024-01-01 06:47:00",
+      -46.926732
+    ],
+    [
+      "2024-01-01 06:48:00",
+      -47.99232
+    ],
+    [
+      "2024-01-01 06:49:00",
+      -49.196645
+    ],
+    [
+      "2024-01-01 06:50:00",
+      -50.479998
+    ],
+    [
+      "2024-01-01 06:51:00",
+      -51.837329
+    ],
+    [
+      "2024-01-01 06:52:00",
+      -53.469952
+    ],
+    [
+      "2024-01-01 06:53:00",
+      -52.630495
+    ],
+    [
+      "2024-01-01 06:54:00",
+      -52.630495
+    ],
+    [
+      "2024-01-01 06:55:00",
+      -52.630495
+    ],
+    [
+      "2024-01-01 06:56:00",
+      -51.800333
+    ],
+    [
+      "2024-01-01 06:57:00",
+      -50.91358
+    ],
+    [
+      "2024-01-01 06:58:00",
+      -50.91358
+    ],
+    [
+      "2024-01-01 06:59:00",
+      -49.974004
+    ],
+    [
+      "2024-01-01 07:00:00",
+      -49.974004
+    ],
+    [
+      "2024-01-01 07:01:00",
+      -49.974004
+    ],
+    [
+      "2024-01-01 07:02:00",
+      -51.970033
+    ],
+    [
+      "2024-01-01 07:03:00",
+      -53.785587
+    ],
+    [
+      "2024-01-01 07:04:00",
+      -53.785587
+    ],
+    [
+      "2024-01-01 07:05:00",
+      -55.646017
+    ],
+    [
+      "2024-01-01 07:06:00",
+      -54.876764
+    ],
+    [
+      "2024-01-01 07:07:00",
+      -54.120068
+    ],
+    [
+      "2024-01-01 07:08:00",
+      -55.737494
+    ],
+    [
+      "2024-01-01 07:09:00",
+      -55.737494
+    ],
+    [
+      "2024-01-01 07:10:00",
+      -55.737494
+    ],
+    [
+      "2024-01-01 07:11:00",
+      -54.901044
+    ],
+    [
+      "2024-01-01 07:12:00",
+      -54.901044
+    ],
+    [
+      "2024-01-01 07:13:00",
+      -56.475141
+    ],
+    [
+      "2024-01-01 07:14:00",
+      -55.669863
+    ],
+    [
+      "2024-01-01 07:15:00",
+      -55.669863
+    ],
+    [
+      "2024-01-01 07:16:00",
+      -57.373932
+    ],
+    [
+      "2024-01-01 07:17:00",
+      -59.041511
+    ],
+    [
+      "2024-01-01 07:18:00",
+      -59.041511
+    ],
+    [
+      "2024-01-01 07:19:00",
+      -59.041511
+    ],
+    [
+      "2024-01-01 07:20:00",
+      -59.041511
+    ],
+    [
+      "2024-01-01 07:21:00",
+      -59.041511
+    ],
+    [
+      "2024-01-01 07:22:00",
+      -59.041511
+    ],
+    [
+      "2024-01-01 07:23:00",
+      -58.209746
+    ],
+    [
+      "2024-01-01 07:24:00",
+      -58.209746
+    ],
+    [
+      "2024-01-01 07:25:00",
+      -59.685238
+    ],
+    [
+      "2024-01-01 07:26:00",
+      -58.93491
+    ],
+    [
+      "2024-01-01 07:27:00",
+      -58.93491
+    ],
+    [
+      "2024-01-01 07:28:00",
+      -58.14874
+    ],
+    [
+      "2024-01-01 07:29:00",
+      -57.414743
+    ],
+    [
+      "2024-01-01 07:30:00",
+      -57.414743
+    ],
+    [
+      "2024-01-01 07:31:00",
+      -57.414743
+    ],
+    [
+      "2024-01-01 07:32:00",
+      -56.64312
+    ],
+    [
+      "2024-01-01 07:33:00",
+      -55.891582
+    ],
+    [
+      "2024-01-01 07:34:00",
+      -55.891582
+    ],
+    [
+      "2024-01-01 07:35:00",
+      -55.042156
+    ],
+    [
+      "2024-01-01 07:36:00",
+      -54.184003
+    ],
+    [
+      "2024-01-01 07:37:00",
+      -54.184003
+    ],
+    [
+      "2024-01-01 07:38:00",
+      -54.184003
+    ],
+    [
+      "2024-01-01 07:39:00",
+      -54.184003
+    ],
+    [
+      "2024-01-01 07:40:00",
+      -54.184003
+    ],
+    [
+      "2024-01-01 07:41:00",
+      -55.981967
+    ],
+    [
+      "2024-01-01 07:42:00",
+      -57.496237
+    ],
+    [
+      "2024-01-01 07:43:00",
+      -59.078822
+    ],
+    [
+      "2024-01-01 07:44:00",
+      -60.762608
+    ],
+    [
+      "2024-01-01 07:45:00",
+      -60.762608
+    ],
+    [
+      "2024-01-01 07:46:00",
+      -60.762608
+    ],
+    [
+      "2024-01-01 07:47:00",
+      -59.872793
+    ],
+    [
+      "2024-01-01 07:48:00",
+      -59.079405
+    ],
+    [
+      "2024-01-01 07:49:00",
+      -60.75515
+    ],
+    [
+      "2024-01-01 07:50:00",
+      -60.75515
+    ],
+    [
+      "2024-01-01 07:51:00",
+      -60.75515
+    ],
+    [
+      "2024-01-01 07:52:00",
+      -60.75515
+    ],
+    [
+      "2024-01-01 07:53:00",
+      -60.75515
+    ],
+    [
+      "2024-01-01 07:54:00",
+      -59.921597
+    ],
+    [
+      "2024-01-01 07:55:00",
+      -59.921597
+    ],
+    [
+      "2024-01-01 07:56:00",
+      -59.059399
+    ],
+    [
+      "2024-01-01 07:57:00",
+      -60.658537
+    ],
+    [
+      "2024-01-01 07:58:00",
+      -60.658537
+    ],
+    [
+      "2024-01-01 07:59:00",
+      -59.897461
+    ],
+    [
+      "2024-01-01 08:00:00",
+      -59.897461
+    ],
+    [
+      "2024-01-01 08:01:00",
+      -59.061005
+    ],
+    [
+      "2024-01-01 08:02:00",
+      -59.061005
+    ],
+    [
+      "2024-01-01 08:03:00",
+      -58.256103
+    ],
+    [
+      "2024-01-01 08:04:00",
+      -58.256103
+    ],
+    [
+      "2024-01-01 08:05:00",
+      -58.256103
+    ],
+    [
+      "2024-01-01 08:06:00",
+      -59.660817
+    ],
+    [
+      "2024-01-01 08:07:00",
+      -58.942684
+    ],
+    [
+      "2024-01-01 08:08:00",
+      -60.35624
+    ],
+    [
+      "2024-01-01 08:09:00",
+      -59.645436
+    ],
+    [
+      "2024-01-01 08:10:00",
+      -58.911416
+    ],
+    [
+      "2024-01-01 08:11:00",
+      -58.178886
+    ],
+    [
+      "2024-01-01 08:12:00",
+      -58.178886
+    ],
+    [
+      "2024-01-01 08:13:00",
+      -57.48932
+    ],
+    [
+      "2024-01-01 08:14:00",
+      -57.48932
+    ],
+    [
+      "2024-01-01 08:15:00",
+      -56.899178
+    ],
+    [
+      "2024-01-01 08:16:00",
+      -57.996961
+    ],
+    [
+      "2024-01-01 08:17:00",
+      -57.996961
+    ],
+    [
+      "2024-01-01 08:18:00",
+      -59.295542
+    ],
+    [
+      "2024-01-01 08:19:00",
+      -60.791039
+    ]
+  ],
+  "metrics": {
+    "total_trades": 270.0,
+    "wins": 151.0,
+    "losses": 115.0,
+    "win_rate": 0.559259,
+    "profit_factor": 0.6581,
+    "total_pnl_usd": -60.791,
+    "avg_r": -0.1463,
+    "gross_profit": 117.0223,
+    "gross_loss": 177.8134,
+    "sharpe": -85.275,
+    "sortino": -46.7667,
+    "max_drawdown_pct": 53.3153
+  },
+  "config": {
+    "instrument": "BTCUSD",
+    "lot": 0.01,
+    "spread_ticks": 0,
+    "tick_size": 0.01,
+    "timeframe": "1m",
+    "warmup_bars": 30,
+    "lot_multiplier": 1.0
+  }
+}
