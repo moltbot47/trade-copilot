@@ -11,3 +11,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
+
+# Playwright
+/playwright-report/
+/test-results/
+/playwright/.cache/
+

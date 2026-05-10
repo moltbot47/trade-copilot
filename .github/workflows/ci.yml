@@ -132,6 +132,44 @@ jobs:
           fi
 
   # -------------------------------------------------
+  # E2E — Playwright tests against a mocked backend
+  # -------------------------------------------------
+  e2e-tests:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright browsers (chromium only, with OS deps)
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm run e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+  # -------------------------------------------------
   # Docker build matrix — verify both images build clean
   # -------------------------------------------------
   docker-build:
@@ -177,7 +215,7 @@ jobs:
   staging-smoke-test:
     name: Staging smoke test (prod gate)
     runs-on: ubuntu-latest
-    needs: [lint, test, docker-build]
+    needs: [lint, test, e2e-tests, docker-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Probe staging /health
