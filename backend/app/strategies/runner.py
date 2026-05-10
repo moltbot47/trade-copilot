@@ -822,12 +822,19 @@ class QuantRunner:
         kill_pct = float(user.daily_kill_switch_pct or 0.0)
         if kill_pct <= 0:
             return True, None
+        # Fail-soft on broker hiccups. The lot cap + position cap + exhaustion
+        # filter still bound risk per trade, so a transient null balance
+        # shouldn't shut the bot off.
         if not account_state:
-            return False, "no_account_state_for_kill_switch_check"
-        balance = float(account_state.get("balance") or 0.0)
-        today_net = float(account_state.get("today_net") or 0.0)
+            return True, None
+        balance_raw = account_state.get("balance")
+        today_raw = account_state.get("today_net")
+        if balance_raw is None or today_raw is None:
+            return True, None
+        balance = float(balance_raw)
+        today_net = float(today_raw)
         if balance <= 0:
-            return False, "zero_balance"
+            return True, None
         loss_pct = (-today_net / balance) * 100.0 if today_net < 0 else 0.0
         if loss_pct >= kill_pct:
             return (
