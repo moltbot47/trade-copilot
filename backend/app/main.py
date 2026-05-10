@@ -166,7 +166,6 @@ def _apply_lightweight_migrations() -> None:
                 logger.warning("migration %s.%s failed: %s", tbl, col, exc)
 
 
-@asynccontextmanager
 async def _periodic_token_refresh_task() -> None:
     """Background task: refresh all TradeLocker tokens every 6 hours.
 
