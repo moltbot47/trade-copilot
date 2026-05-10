@@ -116,6 +116,11 @@ def _apply_lightweight_migrations() -> None:
         # (table_name, column_name, ansi_compatible_column_def)
         # FLOAT + DEFAULT <literal> are accepted by both SQLite and Postgres.
         ("cohorts", "max_favorable_r_seen", "FLOAT DEFAULT 0.0"),
+        # Tiny-account live guardrails (added 2026-05-10 for $21 live experiment).
+        ("users", "max_lot_override", "FLOAT DEFAULT NULL"),
+        ("users", "daily_kill_switch_pct", "FLOAT DEFAULT NULL"),
+        ("users", "max_concurrent_positions", "INTEGER DEFAULT NULL"),
+        ("users", "exhaustion_filter_enabled", "BOOLEAN DEFAULT 0"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.

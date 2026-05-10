@@ -21,11 +21,16 @@ def compute_user_lot(
     account_balance: float,
     max_risk_pct: float = 3.0,
     step: float = 0.01,
+    max_lot_cap: float | None = None,
 ) -> float:
     """Return a rounded lot size that respects user aggression and risk cap.
 
     Conservative model: assume a 1.0 lot trade hitting its stop = ~1% of balance lost.
     So max allowed lot = (max_risk_pct / 1.0). We then take min(scaled, capped).
+
+    If ``max_lot_cap`` is provided, it's a hard ceiling that overrides the
+    aggression scaling — used for tiny live accounts where the broker's min
+    lot already sets the floor and we just want to forbid pyramiding.
     """
     if base_lot <= 0:
         return 0.0
@@ -33,11 +38,12 @@ def compute_user_lot(
     scaled = base_lot * multiplier
 
     if account_balance > 0 and max_risk_pct > 0:
-        # 1.0 lot ~= 1% account risk on a typical FX stop
-        capped = max_risk_pct  # in lots, since 1 lot = 1%
+        capped = max_risk_pct
         scaled = min(scaled, capped)
 
-    # round down to nearest step (broker increment)
+    if max_lot_cap is not None and max_lot_cap > 0:
+        scaled = min(scaled, max_lot_cap)
+
     if step <= 0:
         step = 0.01
     rounded = int(scaled / step) * step

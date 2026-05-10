@@ -67,6 +67,17 @@ class User(Base):
     max_daily_loss_pct: Mapped[float] = mapped_column(Float, default=3.0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Tiny-account live guardrails. When tradelocker_env == "live" the runner
+    # consults these to pre-empt over-leveraging.
+    #   max_lot_override: hard cap on lot size (None = no override, use risk model)
+    #   daily_kill_switch_pct: realized DD that halts trading until next UTC day
+    #   max_concurrent_positions: cap on open cohorts (None = no override)
+    #   exhaustion_filter_enabled: only fire entries that pass the wick/RSI filter
+    max_lot_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    daily_kill_switch_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_concurrent_positions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    exhaustion_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["Execution"]] = relationship(back_populates="user")
 

@@ -33,6 +33,7 @@ from app.db.models import (
 )
 from app.strategies.base import StrategySignal
 from app.strategies.data_feed import BarFetcher
+from app.strategies.exhaustion_filter import passes_exhaustion
 from app.strategies.feedback import FeedbackAdjuster
 from app.strategies.latpfn_client import LaTPFNClient
 from app.strategies.momentum import LatPFNMomentumStrategy
@@ -804,6 +805,48 @@ class QuantRunner:
         except Exception as exc:
             logger.debug("tick log failed: %s", exc)
 
+    def _check_live_guardrails(
+        self, user: User, account_state: dict | None
+    ) -> tuple[bool, str | None]:
+        """Pre-flight risk check for live accounts. Returns (allowed, reason).
+
+        Triggers a halt when:
+          - daily_kill_switch_pct is set AND today's net (equity − balance)
+            has exceeded that loss threshold
+          - account_state is missing required fields (broker likely down)
+
+        Demo accounts and users without overrides pass through with allowed=True.
+        """
+        if user.tradelocker_env != "live":
+            return True, None
+        kill_pct = float(user.daily_kill_switch_pct or 0.0)
+        if kill_pct <= 0:
+            return True, None
+        if not account_state:
+            return False, "no_account_state_for_kill_switch_check"
+        balance = float(account_state.get("balance") or 0.0)
+        today_net = float(account_state.get("today_net") or 0.0)
+        if balance <= 0:
+            return False, "zero_balance"
+        loss_pct = (-today_net / balance) * 100.0 if today_net < 0 else 0.0
+        if loss_pct >= kill_pct:
+            return (
+                False,
+                f"daily_kill_switch_hit loss={loss_pct:.2f}% >= cap {kill_pct:.2f}%",
+            )
+        return True, None
+
+    def _count_user_open_cohorts(self, tm_db: Session, user_id: int) -> int:
+        """Total open cohorts for this user across all symbols on this bot."""
+        from app.db.models import TradeCohort, CohortStatus
+
+        q = tm_db.query(TradeCohort).filter(
+            TradeCohort.user_id == user_id,
+            TradeCohort.bot_id == self.bot_id,
+            TradeCohort.status != CohortStatus.closed,
+        )
+        return q.count()
+
     async def _tick(
         self,
         strategy: LatPFNQuantStrategy,
@@ -895,6 +938,58 @@ class QuantRunner:
 
                         sig = await strategy.on_bar(symbol, bars)
                         if sig is not None and sig.extra.get("kind") == "entry":
+                            # ---- Live-account guardrails (kill switch, position cap, exhaustion) ----
+                            account_state = None
+                            try:
+                                account_state = await client.get_account_state(
+                                    user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+                                )
+                            except Exception as exc:
+                                logger.debug("account state fetch failed: %s", exc)
+
+                            allowed, ks_reason = self._check_live_guardrails(user, account_state)
+                            if not allowed:
+                                self._log_tick(
+                                    symbol, "skip_kill_switch",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason=ks_reason or "kill switch",
+                                    user_id=user.id,
+                                )
+                                continue
+
+                            if user.max_concurrent_positions is not None:
+                                open_count = self._count_user_open_cohorts(tm_db, user.id)
+                                if open_count >= int(user.max_concurrent_positions):
+                                    self._log_tick(
+                                        symbol, "skip_position_cap",
+                                        current_price=current_price,
+                                        forecast_view=forecast_view,
+                                        threshold=threshold,
+                                        reason=f"open_cohorts={open_count} >= cap {user.max_concurrent_positions}",
+                                        user_id=user.id,
+                                    )
+                                    continue
+
+                            if user.exhaustion_filter_enabled:
+                                ok, diag = passes_exhaustion(bars, sig.side)
+                                if not ok:
+                                    self._log_tick(
+                                        symbol, "skip_exhaustion_filter",
+                                        current_price=current_price,
+                                        forecast_view=forecast_view,
+                                        threshold=threshold,
+                                        reason=f"exhaustion_filter: {diag.get('reason')}",
+                                        user_id=user.id,
+                                        extra=diag,
+                                    )
+                                    continue
+
+                            # Apply hard lot cap for tiny live accounts.
+                            if user.max_lot_override is not None and user.max_lot_override > 0:
+                                sig.qty = min(sig.qty, float(user.max_lot_override))
+
                             try:
                                 await self._open_new_cohort(tm, sig, user, token, client)
                                 tm_db.commit()
