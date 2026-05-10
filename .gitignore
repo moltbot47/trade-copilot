@@ -56,3 +56,8 @@ backend/*.sqlite3
 *.log
 logs/
 .deploy-secrets
+
+# SQLite WAL/SHM files (local dev only)
+backend/trade_copilot.db
+backend/trade_copilot.db-shm
+backend/trade_copilot.db-wal
