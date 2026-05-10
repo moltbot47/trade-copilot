@@ -48,8 +48,6 @@ from app.db.models import Bot, Cohort, CohortStatus, StrategyType, User
 from app.strategies.base import StrategySignal
 from app.strategies.momentum import compute_atr
 from app.strategies.trade_manager import (
-    SCALE_IN_R_THRESHOLD,
-    SCALE_OUT_R_THRESHOLD,
     TradeManager,
 )
 
