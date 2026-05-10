@@ -167,7 +167,33 @@ def _apply_lightweight_migrations() -> None:
 
 
 @asynccontextmanager
+async def _periodic_token_refresh_task() -> None:
+    """Background task: refresh all TradeLocker tokens every 6 hours.
+
+    Removes the daily reconnect requirement that previously surfaced as
+    401s on the runner. Failures (e.g. user has no refresh_token, or
+    refresh endpoint rejects) are logged but do not raise — the user
+    simply has to reconnect via the UI. Runs forever; cancelled on shutdown.
+    """
+    import asyncio as _aio
+    from app.core.tradelocker_token_refresh import proactive_refresh_all
+
+    interval_seconds = 6 * 3600
+    while True:
+        try:
+            summary = await proactive_refresh_all()
+            logger.info("periodic TL token refresh: %s", summary)
+        except Exception as exc:
+            logger.warning("periodic TL token refresh raised: %s", exc)
+        try:
+            await _aio.sleep(interval_seconds)
+        except _aio.CancelledError:
+            return
+
+
 async def lifespan(_: FastAPI):
+    import asyncio as _aio
+
     get_settings().assert_production_safe()
     Base.metadata.create_all(bind=engine)
     _apply_lightweight_migrations()
@@ -176,7 +202,16 @@ async def lifespan(_: FastAPI):
     except Exception as exc:  # never crash the app on seed failure
         logger.warning("seed_starter_bots failed: %s", exc)
     _seed_advanced_bots()
-    yield
+
+    refresh_task = _aio.create_task(_periodic_token_refresh_task())
+    try:
+        yield
+    finally:
+        refresh_task.cancel()
+        try:
+            await refresh_task
+        except _aio.CancelledError:
+            pass
 
 
 settings = get_settings()

@@ -591,6 +591,7 @@ class StrategyRunner:
                 token = decrypt(u.tradelocker_token) if u.tradelocker_token else None
                 if token and u.tradelocker_account_id:
                     return {
+                        "user_id": u.id,
                         "account_id": u.tradelocker_account_id,
                         "token": token,
                         "acc_num": u.tradelocker_acc_num or "1",
@@ -693,6 +694,19 @@ class QuantRunner:
             logger.warning("quant runner bot=%s tf=%s: no authed user", self.bot_id, self.timeframe)
             self._record_error("no authenticated user for data feed")
             return
+
+        # Pre-emptively refresh the feed user's token at runner startup.
+        # If the bot has been idle for >24h, the stored token is almost
+        # certainly stale and the first tick would 401 on every call.
+        try:
+            from app.core.tradelocker_token_refresh import refresh_user_token
+
+            new_token = await refresh_user_token(feed_user["user_id"])
+            if new_token:
+                feed_user["token"] = new_token
+                logger.info("quant runner: refreshed feed user %s token at startup", feed_user["user_id"])
+        except Exception as exc:
+            logger.warning("startup token refresh failed: %s", exc)
 
         client = TradeLockerClient(env=feed_user.get("env") or "demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
@@ -802,6 +816,27 @@ class QuantRunner:
                     result = event_bus.publish_global("analysis", payload)
                 if _asyncio.iscoroutine(result):
                     _asyncio.ensure_future(result)
+            except Exception:
+                pass
+
+            # Discord webhook fan-out (best-effort, allowlisted decisions only).
+            try:
+                from app.integrations.discord_signals import (
+                    post_decision_fire_and_forget,
+                )
+
+                post_decision_fire_and_forget(
+                    decision=decision,
+                    bot_id=self.bot_id,
+                    timeframe=self.timeframe,
+                    symbol=symbol,
+                    current_price=current_price,
+                    forecast_drift=(forecast_view or {}).get("drift"),
+                    forecast_confidence=(forecast_view or {}).get("confidence"),
+                    threshold=threshold,
+                    reason=reason,
+                    extra=extra,
+                )
             except Exception:
                 pass
         except Exception as exc:
@@ -1363,6 +1398,7 @@ class QuantRunner:
                 token = decrypt(u.tradelocker_token) if u.tradelocker_token else None
                 if token and u.tradelocker_account_id:
                     return {
+                        "user_id": u.id,
                         "account_id": u.tradelocker_account_id,
                         "token": token,
                         "acc_num": u.tradelocker_acc_num or "1",
