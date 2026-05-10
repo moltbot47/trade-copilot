@@ -98,15 +98,19 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Run pytest
+      - name: Run pytest (with coverage gate)
         working-directory: backend
         env:
           SECRET_KEY: ci_secret_do_not_use_in_prod_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
           ENCRYPTION_KEY: ci_dummy_fernet_key_replace_in_real_envxxxxx=
           DATABASE_URL: "sqlite:///./test_ci.db"
+        # Coverage gate: fail if overall app/ line coverage drops below 73%.
+        # Current measured: 75% (2026-05-10). Threshold is set 2pp below the
+        # measured value so future PRs are expected to maintain or improve
+        # coverage. Raise this number as coverage improves; do not lower it.
         run: |
           if [ -d tests ] || compgen -G "test_*.py" > /dev/null || compgen -G "**/test_*.py" > /dev/null; then
-            pytest -q
+            pytest -q --cov=app --cov-report=term --cov-fail-under=73
           else
             echo "::warning::no backend tests found — skipping"
           fi

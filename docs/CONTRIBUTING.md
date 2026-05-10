@@ -121,6 +121,66 @@ PATH (e.g., via `pyenv` or system Python).
 
 ---
 
+## Coverage
+
+CI enforces a **minimum line coverage of 73%** on `backend/app/` via
+`pytest --cov-fail-under=73`. The threshold sits two percentage points below
+the current measured coverage so future PRs are expected to maintain or
+improve coverage — raise the gate as coverage improves, never lower it.
+
+### Run coverage locally
+
+```bash
+cd backend
+source venv/bin/activate
+pytest --cov=app --cov-report=html --cov-report=term
+```
+
+`--cov-report=term` prints a per-module summary; `--cov-report=html` writes
+a browsable report under `backend/htmlcov/`. To enforce the same gate CI
+uses, add `--cov-fail-under=73`:
+
+```bash
+pytest --cov=app --cov-fail-under=73
+```
+
+### View the HTML report
+
+```bash
+# macOS
+open backend/htmlcov/index.html
+# Linux
+xdg-open backend/htmlcov/index.html
+```
+
+The `htmlcov/` directory is gitignored — regenerate locally as needed.
+Click into any file to see line-by-line coverage with the missing lines
+highlighted in red.
+
+### When to use `# pragma: no cover`
+
+Rarely. Reserve it for genuinely defensive `except` clauses that cannot
+be triggered from tests (e.g., the `except Exception` around an optional
+import for an entire subsystem, or a guard against an OS-level error we
+can't simulate). Examples already in the codebase:
+
+```python
+except Exception as exc:  # pragma: no cover
+    logger.debug("ws publish trades failed user=%s: %s", user_id, exc)
+```
+
+**Do not** use `# pragma: no cover` to mask:
+
+- Untested error paths that you simply didn't write tests for — write them.
+- Dead code — delete it instead.
+- Branches that are hard to test — that usually means the code is too
+  tightly coupled and could be refactored.
+
+If you find yourself adding more than one `pragma: no cover` per file,
+stop and look for a structural fix.
+
+---
+
 ## Reporting security issues
 
 See [`../SECURITY.md`](../SECURITY.md) (if present) or email the maintainer
