@@ -121,6 +121,7 @@ def _apply_lightweight_migrations() -> None:
         ("users", "daily_kill_switch_pct", "FLOAT DEFAULT NULL"),
         ("users", "max_concurrent_positions", "INTEGER DEFAULT NULL"),
         ("users", "exhaustion_filter_enabled", "BOOLEAN DEFAULT 0"),
+        ("users", "bot_paused", "BOOLEAN DEFAULT 0"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.

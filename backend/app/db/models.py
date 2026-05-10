@@ -78,6 +78,12 @@ class User(Base):
     max_concurrent_positions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     exhaustion_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Global panic switch — when True, the runner skips ALL entry decisions
+    # for this user. Settable via DB or POST /api/users/me/panic. Use as
+    # one-button emergency stop without having to call /strategy/stop on
+    # every (bot, timeframe) pair.
+    bot_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["Execution"]] = relationship(back_populates="user")
 

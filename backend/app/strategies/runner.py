@@ -881,7 +881,11 @@ class QuantRunner:
         return True, None
 
     def _count_user_open_cohorts(self, tm_db: Session, user_id: int) -> int:
-        """Total open cohorts for this user across all symbols on this bot."""
+        """Total open cohorts for this user across all symbols on this bot.
+
+        DEPRECATED for cap-enforcement (see _count_broker_positions). Still
+        used by some legacy paths; kept for backwards-compat.
+        """
         from app.db.models import Cohort, CohortStatus
 
         q = tm_db.query(Cohort).filter(
@@ -890,6 +894,33 @@ class QuantRunner:
             Cohort.status != CohortStatus.closed,
         )
         return q.count()
+
+    async def _count_broker_positions(
+        self,
+        client: TradeLockerClient,
+        account_id: str,
+        token: str,
+        acc_num: str,
+    ) -> tuple[int, dict[int, list[dict]]]:
+        """Live broker position count + per-instrument grouping.
+
+        SOURCE OF TRUTH for the position cap. Counts what's actually
+        open at the broker, not what our DB thinks. Eliminates races
+        between 1m/5m runners and catches manual broker positions.
+
+        Returns:
+          (total_count, positions_by_tradable_id)
+        """
+        try:
+            positions = await client.get_positions(account_id, token, acc_num)
+        except Exception as exc:
+            logger.warning("broker position count failed: %s — assuming 0", exc)
+            return 0, {}
+        by_id: dict[int, list[dict]] = {}
+        for p in positions:
+            tid = int(p.get("tradableInstrumentId") or 0)
+            by_id.setdefault(tid, []).append(p)
+        return len(positions), by_id
 
     async def _tick(
         self,
@@ -974,56 +1005,27 @@ class QuantRunner:
                         except Exception as exc:
                             tm_db.rollback()
                             logger.warning("cmd %s on cohort %s failed: %s", cmd.kind, cohort.id, exc)
-                    # 2) Look for new entries.
-                    # Guards (in order):
-                    #  a) No open cohort on this symbol (any side) — covers
-                    #     normal pyramiding case.
-                    #  b) NO BROKER-LEVEL opposite-side exposure either.
-                    #     Even if our DB shows no open cohort, the broker
-                    #     may still hold lingering opposite-side legs from
-                    #     a recent partial-close. Opening a new directional
-                    #     bet on top of that creates the buy+sell mess we
-                    #     observed in the wild. Skip until exposure clears.
+                    # 2) Look for new entries (broker-truth gating).
+                    # We always fetch broker positions before entry so cap +
+                    # exposure decisions are based on the actual broker state,
+                    # not just our DB. This eliminates 1m/5m races and catches
+                    # manual positions opened outside the bot.
                     if not open_cohorts:
-                        # Quick broker-level check
-                        broker_has_opposite = False
-                        try:
-                            broker_pos = await client.get_positions(
-                                user.tradelocker_account_id,
-                                token,
-                                user.tradelocker_acc_num or "1",
-                            )
-                            tradable_id, _ = await client.resolve_symbol(
-                                user.tradelocker_account_id,
-                                token,
-                                user.tradelocker_acc_num or "1",
-                                symbol,
-                            )
-                            broker_has_opposite = any(
-                                int(p.get("tradableInstrumentId", 0)) == tradable_id
-                                for p in broker_pos
-                            )
-                        except Exception as exc:
-                            logger.debug("broker exposure check failed for %s: %s", symbol, exc)
-
-                        if broker_has_opposite:
-                            logger.info(
-                                "skip new entry for %s — broker still has open exposure",
-                                symbol,
-                            )
-                            self._log_tick(
-                                symbol, "skip_existing_position",
-                                current_price=current_price,
-                                forecast_view=forecast_view,
-                                threshold=threshold,
-                                reason="broker still has open exposure",
-                                user_id=user.id,
-                            )
-                            continue
-
                         sig = await strategy.on_bar(symbol, bars)
                         if sig is not None and sig.extra.get("kind") == "entry":
-                            # ---- Live-account guardrails (kill switch, position cap, exhaustion) ----
+                            # ---- Step 1: Global panic switch ----
+                            if getattr(user, "bot_paused", False):
+                                self._log_tick(
+                                    symbol, "skip_kill_switch",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason="user.bot_paused=True (global panic)",
+                                    user_id=user.id,
+                                )
+                                continue
+
+                            # ---- Step 2: Kill switch (daily DD) ----
                             account_state = None
                             try:
                                 account_state = await client.get_account_state(
@@ -1044,18 +1046,47 @@ class QuantRunner:
                                 )
                                 continue
 
-                            if user.max_concurrent_positions is not None:
-                                open_count = self._count_user_open_cohorts(tm_db, user.id)
-                                if open_count >= int(user.max_concurrent_positions):
+                            # ---- Step 3: Broker truth ONE fetch for both
+                            # position cap + exposure check ----
+                            broker_total, by_tid = await self._count_broker_positions(
+                                client,
+                                user.tradelocker_account_id,
+                                token,
+                                user.tradelocker_acc_num or "1",
+                            )
+
+                            cap = int(user.max_concurrent_positions or 0)
+                            if cap > 0 and broker_total >= cap:
+                                self._log_tick(
+                                    symbol, "skip_position_cap",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason=f"broker_positions={broker_total} >= cap {cap}",
+                                    user_id=user.id,
+                                )
+                                continue
+
+                            # ---- Step 4: Broker-level exposure on THIS symbol ----
+                            try:
+                                tradable_id, _ = await client.resolve_symbol(
+                                    user.tradelocker_account_id,
+                                    token,
+                                    user.tradelocker_acc_num or "1",
+                                    symbol,
+                                )
+                                if tradable_id in by_tid and by_tid[tradable_id]:
                                     self._log_tick(
-                                        symbol, "skip_position_cap",
+                                        symbol, "skip_existing_position",
                                         current_price=current_price,
                                         forecast_view=forecast_view,
                                         threshold=threshold,
-                                        reason=f"open_cohorts={open_count} >= cap {user.max_concurrent_positions}",
+                                        reason=f"broker has {len(by_tid[tradable_id])} {symbol} position(s)",
                                         user_id=user.id,
                                     )
                                     continue
+                            except Exception as exc:
+                                logger.debug("symbol resolution failed for %s: %s", symbol, exc)
 
                             if user.exhaustion_filter_enabled:
                                 # 'exhaustion_filter_enabled' is a legacy flag —
@@ -1142,6 +1173,10 @@ class QuantRunner:
         client: TradeLockerClient,
     ) -> None:
         atr = float(sig.extra.get("atr", 0.0))
+        logger.info(
+            "place_order request: %s %s qty=%.4f entry=%.2f SL=%.2f TP=%.2f",
+            sig.side, sig.symbol, sig.qty, sig.entry_price, sig.stop_loss or 0.0, sig.take_profit or 0.0,
+        )
         order = await client.place_order(
             account_id=user.tradelocker_account_id,
             token=token,
@@ -1153,16 +1188,60 @@ class QuantRunner:
             tp=sig.take_profit,
         )
         order_id = str(order.get("order_id") or "")
+        logger.info("place_order response: %s", order)
+
         # Find the position id
         positions = await client.get_positions(
             user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
         )
         # Newest position with matching symbol/side
         pos_id = None
+        pos_obj: dict | None = None
         for p in reversed(positions):
             if str(p.get("side")).lower() == sig.side.lower():
                 pos_id = str(p.get("id"))
+                pos_obj = p
                 break
+
+        # Verify SL/TP made it onto the broker. If not, repair via modify_position.
+        # Some TL deployments silently drop sl/tp on the order create — we send
+        # a follow-up modify so every entry has a stop. Without this we get
+        # uncovered positions like the 2026-05-10 hedged ETH mess.
+        if pos_id and pos_obj:
+            broker_sl = pos_obj.get("stopLoss") or pos_obj.get("stop_loss")
+            broker_tp = pos_obj.get("takeProfit") or pos_obj.get("take_profit")
+            needs_sl_repair = (
+                sig.stop_loss is not None
+                and (broker_sl is None or float(broker_sl) == 0.0)
+            )
+            needs_tp_repair = (
+                sig.take_profit is not None
+                and (broker_tp is None or float(broker_tp) == 0.0)
+            )
+            if needs_sl_repair or needs_tp_repair:
+                logger.warning(
+                    "broker dropped sl=%s tp=%s on order — repairing pos=%s",
+                    broker_sl, broker_tp, pos_id,
+                )
+                try:
+                    await client.modify_position(
+                        pos_id,
+                        token=token,
+                        acc_num=user.tradelocker_acc_num or "1",
+                        stop_loss=sig.stop_loss if needs_sl_repair else None,
+                        take_profit=sig.take_profit if needs_tp_repair else None,
+                    )
+                except Exception as exc:
+                    logger.error("SL/TP repair failed for pos %s: %s — closing immediately", pos_id, exc)
+                    try:
+                        await client.close_position(
+                            pos_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                        )
+                    except Exception as exc2:
+                        logger.exception("emergency close failed pos=%s: %s", pos_id, exc2)
+                    raise RuntimeError(f"position {pos_id} could not have SL set; closed defensively")
         cohort = tm.open_cohort(
             instrument=sig.symbol,
             side=sig.side,

@@ -70,13 +70,19 @@ def _ws_publish_sl_moved(
 
 
 # Tuning knobs — exposed as class attrs so tests can override.
-SCALE_IN_R_THRESHOLD = 0.5         # +0.5R favorable
-SCALE_OUT_R_THRESHOLD = 1.0        # +1.0R hits TP1 → close 50%
+# 2026-05-10: tightened for tiny-account scalping. Faster profit-taking,
+# earlier risk reduction. Originally tuned for swing trades on $1k+ accounts.
+BREAKEVEN_R_THRESHOLD = 0.3        # +0.3R favorable → move SL to break-even
+SCALE_IN_R_THRESHOLD = 0.5         # +0.5R favorable → add a leg (if forecast still on)
+SCALE_OUT_R_THRESHOLD = 0.5        # +0.5R → close 50% (was 1.0R; on $21 account
+                                   #         spread tax dominates if we wait for 1R)
 TRAIL_ATR_MULTIPLE = 1.0           # trail SL by 1×ATR
-TRAIL_LOCK_MIN_R = 0.5             # once trailed past entry, lock min +0.5R
-DRAWDOWN_ATR_LIMIT = 2.0           # cohort avg drawdown > 2×ATR → exit
+TRAIL_LOCK_MIN_R = 0.3             # once trailed past entry, lock min +0.3R
+DRAWDOWN_ATR_LIMIT = 1.5           # tightened: cohort avg DD > 1.5×ATR → exit
+                                   # (was 2.0; cap losses faster on tiny acct)
 SCALE_IN_MAX_LEGS = 3              # entry + 2 scale-ins (hard cap)
-FORECAST_REVERSE_THRESHOLD = 1.5   # opposite-direction forecast > 1.5σ → exit
+FORECAST_REVERSE_THRESHOLD = 1.0   # opposite-direction forecast > 1.0σ → exit
+                                   # (was 1.5; more responsive to flips)
 
 # Trailing-ratchet tuning (Wave 5B).
 RATCHET_TRIGGER_R = 1.5            # ratchet activates only after price reaches >= 1.5R
@@ -498,6 +504,23 @@ class TradeManager:
             return CohortCommand(
                 kind="exit_all", cohort_id=cohort.id, reason="forecast_reversed"
             )
+
+        # 1e. Break-even shift (NEW for tiny-account scalping). Once price
+        # moves +BREAKEVEN_R_THRESHOLD favorable, immediately move SL to the
+        # cohort's weighted_avg_entry so the trade is risk-free for the rest
+        # of the move. Only fires while status=open and SL hasn't already
+        # been moved past entry. This is what catches "trade was in profit
+        # early but didn't lock anything in" — every winning trade should
+        # at least become risk-free quickly.
+        if cohort.status == CohortStatus.open and favorable_r >= BREAKEVEN_R_THRESHOLD:
+            be_target = float(cohort.weighted_avg_entry)
+            if self._is_better_stop(cohort, be_target):
+                return CohortCommand(
+                    kind="modify_sl",
+                    cohort_id=cohort.id,
+                    new_stop=be_target,
+                    reason="breakeven_lock",
+                )
 
         # 2. Trailing stop update (after partial close — i.e. status=partial)
         if cohort.status == CohortStatus.partial:
