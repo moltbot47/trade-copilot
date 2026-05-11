@@ -20,16 +20,17 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 22,
+          fontSize: 20,
           background: "#0a0a0a",
           color: "#00ff41",
           fontWeight: 900,
           fontFamily: "monospace",
           borderRadius: 6,
           border: "1.5px solid #00ff41",
+          letterSpacing: -1,
         }}
       >
-        ▲
+        {">_"}
       </div>
     ),
     { ...size },

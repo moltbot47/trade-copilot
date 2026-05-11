@@ -31,13 +31,15 @@ export default function OpenGraphImage() {
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <div
             style={{
-              fontSize: 60,
+              fontSize: 54,
               color: "#00ff41",
               fontWeight: 900,
               lineHeight: 1,
+              letterSpacing: -2,
+              fontFamily: "monospace",
             }}
           >
-            ▲
+            {">_"}
           </div>
           <div
             style={{

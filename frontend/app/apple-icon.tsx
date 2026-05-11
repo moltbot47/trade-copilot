@@ -26,7 +26,16 @@ export default function AppleIcon() {
           fontFamily: "monospace",
         }}
       >
-        <div style={{ fontSize: 110, fontWeight: 900, lineHeight: 1 }}>▲</div>
+        <div
+          style={{
+            fontSize: 78,
+            fontWeight: 900,
+            lineHeight: 1,
+            letterSpacing: -4,
+          }}
+        >
+          {">_"}
+        </div>
         <div
           style={{
             fontSize: 22,
