@@ -428,6 +428,12 @@ async def lifespan(_: FastAPI):
     from app.monitoring.daily_summary import daily_summary_task
     summary_task = _aio.create_task(daily_summary_task())
 
+    # Continuous LaT-PFN opportunity scanner — runs every SCAN_INTERVAL_S
+    # (default 5 min), alerts Discord when |drift/σ| crosses SCAN_THRESHOLD
+    # (default 1.5σ). No-op unless SCAN_ENABLED=1 in env.
+    from app.integrations.opportunity_scanner import opportunity_scanner_task
+    scanner_task = _aio.create_task(opportunity_scanner_task())
+
     # Auto-resume runners that were running before the last shutdown.
     try:
         await _auto_resume_runners()
@@ -447,7 +453,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        for task in (refresh_task, reconcile_task, summary_task):
+        for task in (refresh_task, reconcile_task, summary_task, scanner_task):
             task.cancel()
             try:
                 await task

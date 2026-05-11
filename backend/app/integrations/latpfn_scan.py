@@ -26,8 +26,8 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
-# Default scan basket — fast, balanced across asset classes, fits in
-# Discord's 10s interaction deferral window with parallel fetches.
+# Default scan basket — balanced across asset classes. Used by the /scan
+# Discord command and (smaller subset) the opportunity_scanner task.
 DEFAULT_INSTRUMENTS: list[tuple[str, str]] = [
     ("GC=F", "XAUUSD"),
     ("NQ=F", "NAS100"),
@@ -38,6 +38,44 @@ DEFAULT_INSTRUMENTS: list[tuple[str, str]] = [
     ("BTC-USD", "BTCUSD"),
     ("ETH-USD", "ETHUSD"),
     ("CL=F", "WTI"),
+]
+
+
+# Expanded basket for the 5-min opportunity_scanner — covers indices,
+# metals, FX majors + crosses, crypto, and oil. 24 instruments. Each one
+# is a (yfinance_ticker, display_label) pair. Resource math: 24 × 1.5s
+# LaT-PFN inference per scan × 12 scans/hour = ~432 CPU-sec/hour on DO,
+# i.e. ~12% of a single vCPU — well within budget.
+EXPANDED_INSTRUMENTS: list[tuple[str, str]] = [
+    # ---- Equity indices ----
+    ("ES=F", "SP500"),
+    ("NQ=F", "NAS100"),
+    ("YM=F", "US30"),
+    ("RTY=F", "US2000"),
+    ("^GDAXI", "DE40"),
+    ("^FTSE", "FTSE100"),
+    ("^AXJO", "AU200"),
+    ("^HSI", "HK50"),
+    # ---- Metals + commodities ----
+    ("GC=F", "XAUUSD"),
+    ("SI=F", "XAGUSD"),
+    ("CL=F", "WTI"),
+    ("NG=F", "NATGAS"),
+    # ---- FX majors ----
+    ("EURUSD=X", "EURUSD"),
+    ("GBPUSD=X", "GBPUSD"),
+    ("USDJPY=X", "USDJPY"),
+    ("AUDUSD=X", "AUDUSD"),
+    ("USDCAD=X", "USDCAD"),
+    ("NZDUSD=X", "NZDUSD"),
+    ("USDCHF=X", "USDCHF"),
+    # ---- FX crosses ----
+    ("GBPJPY=X", "GBPJPY"),
+    ("EURJPY=X", "EURJPY"),
+    ("EURGBP=X", "EURGBP"),
+    # ---- Crypto majors ----
+    ("BTC-USD", "BTCUSD"),
+    ("ETH-USD", "ETHUSD"),
 ]
 
 
