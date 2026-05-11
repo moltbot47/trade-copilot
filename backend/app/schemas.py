@@ -77,6 +77,26 @@ class TradeLockerConnect(BaseModel):
     password: str = Field(min_length=1, max_length=128)
     server: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     env: Literal["demo", "live"] = "demo"
+    # Optional account picker — TradeLocker logins often have multiple
+    # accounts (demo + live + prop). If omitted, the connect endpoint will
+    # either (a) auto-link the only account, or (b) refuse with a 409
+    # carrying the candidate list so the frontend can prompt.
+    account_id: Optional[str] = None
+
+
+class TradeLockerAccountListItem(BaseModel):
+    """One row in the account picker — slim subset of the broker's response."""
+    account_id: str
+    acc_num: str
+    name: Optional[str] = None
+    balance: float = 0.0
+    currency: Optional[str] = None
+    # TradeLocker exposes a 'status' enum (ACTIVE, ARCHIVED, ...) — we pass it
+    # through so the UI can grey out non-tradeable rows.
+    status: Optional[str] = None
+    # Broker-side type hint (LIVE / DEMO / PROP / etc.) where TradeLocker
+    # provides one; otherwise None and the UI falls back to env.
+    type: Optional[str] = None
 
 
 class TradeLockerAccountOut(BaseModel):

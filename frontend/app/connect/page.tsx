@@ -45,6 +45,20 @@ export default function ConnectPage() {
   const [accLoading, setAccLoading] = useState(true);
   const [accError, setAccError] = useState<string | null>(null);
 
+  // When the broker returns >1 linked accounts, we surface a picker here
+  // and re-submit with the chosen account_id. Cleared on success and
+  // re-fetched if the user wipes the form.
+  type AccountCandidate = {
+    account_id: string;
+    acc_num: string;
+    name?: string | null;
+    balance?: number;
+    currency?: string | null;
+    status?: string | null;
+    type?: string | null;
+  };
+  const [accountCandidates, setAccountCandidates] = useState<AccountCandidate[] | null>(null);
+
   const ws = useWebSocket();
 
   useEffect(() => {
@@ -101,6 +115,49 @@ export default function ConnectPage() {
     return off;
   }, [ws.subscribe]);
 
+  const doConnect = async (accountId?: string) => {
+    setError(null);
+    setResult(null);
+    setLoading(true);
+    try {
+      const res = await api.connectTradeLocker(
+        email,
+        password,
+        server,
+        env,
+        accountId,
+      );
+      setResult(res);
+      setAccountCandidates(null); // dismiss picker on success
+      try {
+        const a = await api.getAccountState();
+        setAccount(a);
+        setAccError(null);
+      } catch {
+        // ignore — we'll show whatever the WS pushes next
+      }
+    } catch (err) {
+      // 409 with code=select_account → render the account picker rather
+      // than treating it as a flat error.
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        typeof err.detail === "object" &&
+        err.detail !== null &&
+        (err.detail as { code?: string }).code === "select_account"
+      ) {
+        const candidates = (err.detail as { accounts?: AccountCandidate[] }).accounts ?? [];
+        setAccountCandidates(candidates);
+        // Clear any stale error message so the picker stands alone.
+        setError(null);
+      } else {
+        setError(friendlyError(err));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Confirmation step for live (real money)
@@ -113,25 +170,7 @@ export default function ConnectPage() {
       );
       if (!ok) return;
     }
-    setError(null);
-    setResult(null);
-    setLoading(true);
-    try {
-      const res = await api.connectTradeLocker(email, password, server, env);
-      setResult(res);
-      // refresh account
-      try {
-        const a = await api.getAccountState();
-        setAccount(a);
-        setAccError(null);
-      } catch (err) {
-        // ignore — we'll show whatever the WS pushes next
-      }
-    } catch (err) {
-      setError(friendlyError(err));
-    } finally {
-      setLoading(false);
-    }
+    await doConnect();
   };
 
   // Account-card status copy: differentiate "we have no session yet" from
@@ -288,6 +327,109 @@ export default function ConnectPage() {
               error: {error}
             </p>
           )}
+          {accountCandidates && accountCandidates.length > 0 && (
+            <div
+              role="region"
+              aria-labelledby="picker-heading"
+              style={{
+                padding: "0.85rem 1rem",
+                border: "1px solid var(--warn)",
+                background: "rgba(255, 200, 0, 0.04)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.6rem",
+              }}
+            >
+              <div
+                id="picker-heading"
+                style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}
+              >
+                <span style={{ color: "var(--warn)", fontWeight: 700 }}>
+                  ⚠ pick an account
+                </span>
+                <span className="dim" style={{ fontSize: "0.85rem" }}>
+                  Your TradeLocker login has {accountCandidates.length} accounts.
+                  Choose which one to link.
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.4rem",
+                }}
+              >
+                {accountCandidates.map((a) => {
+                  const inactive = a.status && a.status !== "ACTIVE";
+                  return (
+                    <button
+                      key={a.account_id}
+                      type="button"
+                      onClick={() => doConnect(a.account_id)}
+                      disabled={loading || !!inactive}
+                      style={{
+                        padding: "0.5rem 0.75rem",
+                        display: "grid",
+                        gridTemplateColumns: "minmax(80px,110px) 1fr auto",
+                        gap: "0.6rem",
+                        alignItems: "center",
+                        textAlign: "left",
+                        background: inactive
+                          ? "transparent"
+                          : "rgba(255,255,255,0.02)",
+                        border: "1px solid var(--accent-dim)",
+                        cursor: inactive ? "not-allowed" : "pointer",
+                        color: inactive ? "var(--dim)" : "inherit",
+                      }}
+                    >
+                      <span className="accent" style={{ fontWeight: 700 }}>
+                        {a.account_id}
+                      </span>
+                      <span style={{ fontSize: "0.85rem" }}>
+                        {a.name ?? "—"}
+                        {a.type ? (
+                          <span className="dim" style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}>
+                            {a.type}
+                          </span>
+                        ) : null}
+                        {a.status && a.status !== "ACTIVE" ? (
+                          <span
+                            style={{
+                              marginLeft: "0.5rem",
+                              fontSize: "0.7rem",
+                              color: "var(--warn)",
+                              letterSpacing: 1,
+                            }}
+                          >
+                            {a.status}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: "0.85rem",
+                          color: "var(--accent)",
+                        }}
+                      >
+                        {a.currency ?? "USD"}{" "}
+                        {(a.balance ?? 0).toFixed(2)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountCandidates(null)}
+                className="btn"
+                style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", alignSelf: "flex-start" }}
+              >
+                cancel
+              </button>
+            </div>
+          )}
+
           {(result?.success || result?.status === "connected") && (
             <div
               role="status"

@@ -79,6 +79,59 @@ async def connect(
         logger.error("tradelocker authenticate returned no access_token: %s", result)
         raise HTTPException(status_code=502, detail="Broker auth returned no token.")
 
+    # ----- Account selection -----
+    # TradeLocker logins commonly carry multiple accounts (demo + live + prop).
+    # Previously we silently picked index 0, which is why a live account
+    # could connect under a different account id than the user expected.
+    # Now: if the user passed an explicit account_id, honor it; otherwise
+    # auto-link only when there's a single account; refuse with 409 + the
+    # candidate list when there's more than one and the user hasn't chosen.
+    all_accounts: list = result.get("all_accounts") or []
+    chosen: dict | None = None
+    if payload.account_id:
+        chosen = next(
+            (a for a in all_accounts if str(a.get("id")) == str(payload.account_id)),
+            None,
+        )
+        if chosen is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"account_id {payload.account_id!r} not found among your "
+                    f"{len(all_accounts)} linked TradeLocker accounts."
+                ),
+            )
+    elif len(all_accounts) == 1:
+        chosen = all_accounts[0]
+    else:
+        # Tell the frontend to prompt. We don't persist any credentials in
+        # this branch — the auth_token would be useful but it's session-only
+        # so the cost of asking the user to re-authenticate after picking
+        # is one extra POST. Worth the security floor.
+        candidates = [
+            {
+                "account_id": str(a.get("id")),
+                "acc_num": str(a.get("accNum")),
+                "name": a.get("name"),
+                "balance": float(a.get("accountBalance", 0) or 0),
+                "currency": a.get("currency"),
+                "status": a.get("status"),
+                "type": a.get("accountType"),
+            }
+            for a in all_accounts
+        ]
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "select_account",
+                "message": (
+                    f"You have {len(all_accounts)} linked TradeLocker accounts. "
+                    f"Resubmit with one of the account_id values from `accounts`."
+                ),
+                "accounts": candidates,
+            },
+        )
+
     # Stop any existing relay BEFORE we swap credentials so it doesn't
     # keep using stale tokens. Idempotent — no-op if no relay is running.
     # Snapshot "was this a reconnect?" first — used for the admin alert
@@ -99,8 +152,8 @@ async def connect(
         user.tradelocker_refresh_token = (
             encrypt(result.get("refresh_token")) if result.get("refresh_token") else None
         )
-        user.tradelocker_account_id = result.get("account_id")
-        user.tradelocker_acc_num = result.get("acc_num") or "1"
+        user.tradelocker_account_id = str(chosen.get("id"))
+        user.tradelocker_acc_num = str(chosen.get("accNum") or "1")
         user.tradelocker_server = payload.server
         user.tradelocker_env = payload.env
         db.commit()

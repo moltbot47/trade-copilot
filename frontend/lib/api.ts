@@ -45,12 +45,23 @@ export type ApiErrorKind =
 export class ApiError extends Error {
   status?: number;
   kind: ApiErrorKind;
+  // Structured `detail` payload when the backend returns one — e.g.
+  // 409 select_account returns {code, message, accounts}. Callers can
+  // narrow `detail.code` to render the right UX (picker, MFA prompt, ...)
+  // instead of treating every 4xx as a flat error string.
+  detail?: unknown;
 
-  constructor(message: string, status?: number, kind: ApiErrorKind = "unknown") {
+  constructor(
+    message: string,
+    status?: number,
+    kind: ApiErrorKind = "unknown",
+    detail?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.kind = kind;
+    this.detail = detail;
   }
 }
 
@@ -109,12 +120,24 @@ async function request<T>(
 
   if (!res.ok) {
     // Try to extract the backend's structured error body before deciding
-    // on a friendly message.
+    // on a friendly message. We keep the raw `detail` payload around on
+    // the ApiError so callers can branch on `detail.code` (e.g., the
+    // select_account picker carries an accounts array we'd otherwise lose).
     let backendDetail: string | null = null;
+    let rawDetail: unknown = undefined;
     try {
       const body = await res.json();
-      if (body?.detail) backendDetail = String(body.detail);
-      else if (body?.message) backendDetail = String(body.message);
+      if (body?.detail !== undefined) {
+        rawDetail = body.detail;
+        if (typeof body.detail === "string") backendDetail = body.detail;
+        else if (typeof body.detail === "object" && body.detail !== null) {
+          // Object form — surface its `message` as the user-facing string.
+          const msg = (body.detail as { message?: unknown }).message;
+          if (typeof msg === "string") backendDetail = msg;
+        }
+      } else if (body?.message) {
+        backendDetail = String(body.message);
+      }
     } catch {
       // body wasn't JSON — fall through to status-based messaging
     }
@@ -126,16 +149,18 @@ async function request<T>(
         backendDetail || "Not signed in. Refresh and try again.",
         401,
         "auth",
+        rawDetail,
       );
     }
     if (status === 403) {
-      throw new ApiError(backendDetail || "Forbidden.", 403, "auth");
+      throw new ApiError(backendDetail || "Forbidden.", 403, "auth", rawDetail);
     }
     if (status >= 400 && status < 500) {
       throw new ApiError(
         backendDetail || `Request failed (HTTP ${status})`,
         status,
         "validation",
+        rawDetail,
       );
     }
     if (status >= 500) {
@@ -143,6 +168,7 @@ async function request<T>(
         backendDetail || "Server error. Try again in a moment.",
         status,
         "server",
+        rawDetail,
       );
     }
     // Catch-all for the rare 3xx-leak.
@@ -150,6 +176,7 @@ async function request<T>(
       backendDetail || `HTTP ${status}`,
       status,
       "unknown",
+      rawDetail,
     );
   }
   // Some endpoints return no body (e.g. logout could).
@@ -185,10 +212,18 @@ export const api = {
     password: string,
     server: string,
     env: "demo" | "live" = "demo",
+    accountId?: string,
   ) =>
     request<ConnectResponse>("/api/tradelocker/connect", {
       method: "POST",
-      body: JSON.stringify({ email, password, server, env }),
+      body: JSON.stringify({
+        email,
+        password,
+        server,
+        env,
+        // Backend omits the field rather than reading null/undefined.
+        ...(accountId ? { account_id: accountId } : {}),
+      }),
     }),
   getAccountState: () =>
     request<AccountState>("/api/tradelocker/account"),
