@@ -25,6 +25,9 @@ structlog>=24.1.0
 sentry-sdk[fastapi]>=2.0.0
 prometheus-client>=0.20.0
 
+# --- interactive Discord bot (optional — runs only if DISCORD_BOT_TOKEN set) ---
+discord.py>=2.4.0
+
 # --- testing ---
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

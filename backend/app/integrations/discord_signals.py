@@ -220,11 +220,88 @@ async def post_decision(
     color = _COLORS.get(decision, 0x90A4AE)
     emoji = _EMOJIS.get(decision, "📢")
 
+    # ---- Direction + price-formatting helpers -------------------------------
+    # Side is encoded in the decision name ("entry_buy" / "entry_sell"). We
+    # also accept an explicit override in `extra` since some non-entry
+    # decisions (scale_in, partial_close) carry a side too.
+    side = (extra.get("side") or "").lower()
+    if not side:
+        if "buy" in decision:
+            side = "buy"
+        elif "sell" in decision:
+            side = "sell"
+
+    side_emoji = "🟢" if side == "buy" else "🔴" if side == "sell" else ""
+    side_label = side.upper() if side else ""
+
+    # Price precision: FX needs 5 decimals, indices 2, crypto 2-4 depending
+    # on magnitude. Pick by the rough size of `current_price` if we have it.
+    def _fmt_price(p: float | None) -> str:
+        if p is None:
+            return "—"
+        v = float(p)
+        if v >= 1000:
+            return f"{v:,.2f}"
+        if v >= 1:
+            return f"{v:,.4f}"
+        return f"{v:.6f}"
+
+    entry_price = extra.get("entry") or current_price
+    sl_price = extra.get("sl")
+    tp_price = extra.get("tp")
+
+    # ---- Side / entry / TP / SL (the bit traders actually scan for) ---------
     fields: list[dict[str, Any]] = []
-    if current_price is not None:
+    if side and entry_price is not None:
         fields.append(
-            {"name": "Price", "value": f"${current_price:,.2f}", "inline": True}
+            {
+                "name": "Setup",
+                "value": f"{side_emoji} **{side_label}** @ {_fmt_price(entry_price)}",
+                "inline": False,
+            }
         )
+
+    if tp_price is not None and entry_price is not None:
+        tp_pct = (float(tp_price) - float(entry_price)) / float(entry_price) * 100.0
+        tp_sign = "+" if tp_pct >= 0 else ""
+        fields.append(
+            {
+                "name": "Take Profit",
+                "value": f"{_fmt_price(tp_price)} ({tp_sign}{tp_pct:.2f}%)",
+                "inline": True,
+            }
+        )
+    elif tp_price is not None:
+        fields.append({"name": "Take Profit", "value": _fmt_price(tp_price), "inline": True})
+
+    if sl_price is not None and entry_price is not None:
+        sl_pct = (float(sl_price) - float(entry_price)) / float(entry_price) * 100.0
+        sl_sign = "+" if sl_pct >= 0 else ""
+        fields.append(
+            {
+                "name": "Stop Loss",
+                "value": f"{_fmt_price(sl_price)} ({sl_sign}{sl_pct:.2f}%)",
+                "inline": True,
+            }
+        )
+    elif sl_price is not None:
+        fields.append({"name": "Stop Loss", "value": _fmt_price(sl_price), "inline": True})
+
+    # R:R — only when we have a complete triangle. Direction-aware so a
+    # SELL with TP below entry still produces a positive ratio.
+    if entry_price is not None and tp_price is not None and sl_price is not None:
+        try:
+            tp_dist = abs(float(tp_price) - float(entry_price))
+            sl_dist = abs(float(entry_price) - float(sl_price))
+            if sl_dist > 0:
+                rr = tp_dist / sl_dist
+                fields.append(
+                    {"name": "R:R", "value": f"{rr:.2f} : 1", "inline": True}
+                )
+        except (TypeError, ValueError):
+            pass
+
+    # ---- Forecast diagnostics (analysis context) ----------------------------
     if forecast_confidence is not None:
         fields.append(
             {
@@ -248,16 +325,13 @@ async def post_decision(
         )
     if "qty" in extra:
         fields.append({"name": "Lot", "value": f"{extra['qty']:.2f}", "inline": True})
-    if "sl" in extra and extra["sl"] is not None:
-        fields.append(
-            {"name": "SL", "value": f"${float(extra['sl']):,.2f}", "inline": True}
-        )
-    if "tp" in extra and extra["tp"] is not None:
-        fields.append(
-            {"name": "TP", "value": f"${float(extra['tp']):,.2f}", "inline": True}
-        )
 
-    title = f"{emoji} {decision.replace('_', ' ').upper()} · {symbol}"
+    # Title now leads with the side so the channel feed is scannable at a glance:
+    # "🟢 BUY · SP500 — entry @ 7,430.95"
+    if side_label:
+        title = f"{side_emoji} {side_label} · {symbol} — {decision.replace('_', ' ')}"
+    else:
+        title = f"{emoji} {decision.replace('_', ' ').upper()} · {symbol}"
     description = reason or "—"
 
     # Rolling W/L counter — appended to the footer so every post shows the

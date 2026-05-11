@@ -433,6 +433,17 @@ async def lifespan(_: FastAPI):
         await _auto_resume_runners()
     except Exception as exc:
         logger.warning("auto-resume runners failed: %s", exc)
+
+    # Interactive Discord bot — no-op unless DISCORD_BOT_TOKEN is set.
+    # The bot runs as its own asyncio task and exposes slash commands
+    # (/status, /balance, /long, /short, /close, /panic, /resume).
+    try:
+        from app.integrations.discord_bot import start_bot, stop_bot
+        await start_bot()
+    except Exception as exc:  # never crash boot on bot failure
+        logger.warning("discord_bot start failed: %s", exc)
+        stop_bot = None  # type: ignore[assignment]
+
     try:
         yield
     finally:
@@ -442,6 +453,11 @@ async def lifespan(_: FastAPI):
                 await task
             except _aio.CancelledError:
                 pass
+        if stop_bot is not None:
+            try:
+                await stop_bot()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("discord_bot stop failed (non-fatal): %s", exc)
 
 
 settings = get_settings()
