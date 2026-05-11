@@ -98,6 +98,14 @@ class TradeLockerAccountListItem(BaseModel):
     # Broker-side type hint (LIVE / DEMO / PROP / etc.) where TradeLocker
     # provides one; otherwise None and the UI falls back to env.
     type: Optional[str] = None
+    # True if this is the account currently linked on the user's session —
+    # the picker UI uses this to mark the active row.
+    is_current: bool = False
+
+
+class TradeLockerSwitchAccount(BaseModel):
+    """Body for POST /api/tradelocker/switch-account."""
+    account_id: str
 
 
 class TradeLockerAccountOut(BaseModel):

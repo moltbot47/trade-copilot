@@ -56,8 +56,52 @@ export default function ConnectPage() {
     currency?: string | null;
     status?: string | null;
     type?: string | null;
+    is_current?: boolean;
   };
   const [accountCandidates, setAccountCandidates] = useState<AccountCandidate[] | null>(null);
+
+  // Switch-account flow on the already-linked session. Lists all accounts
+  // via the saved TradeLocker token (no password re-prompt), lets the user
+  // swap to a different one in one click.
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherAccounts, setSwitcherAccounts] = useState<AccountCandidate[] | null>(null);
+  const [switcherLoading, setSwitcherLoading] = useState(false);
+  const [switcherErr, setSwitcherErr] = useState<string | null>(null);
+
+  const openSwitcher = async () => {
+    setSwitcherOpen(true);
+    setSwitcherLoading(true);
+    setSwitcherErr(null);
+    try {
+      const data = await api.listTradeLockerAccounts();
+      setSwitcherAccounts(data.accounts as AccountCandidate[]);
+    } catch (err) {
+      setSwitcherErr(friendlyError(err));
+    } finally {
+      setSwitcherLoading(false);
+    }
+  };
+
+  const closeSwitcher = () => {
+    setSwitcherOpen(false);
+    setSwitcherAccounts(null);
+    setSwitcherErr(null);
+  };
+
+  const doSwitch = async (accountId: string) => {
+    setSwitcherLoading(true);
+    setSwitcherErr(null);
+    try {
+      await api.switchTradeLockerAccount(accountId);
+      // Refresh the current-session card with the new account.
+      const a = await api.getAccountState();
+      setAccount(a);
+      closeSwitcher();
+    } catch (err) {
+      setSwitcherErr(friendlyError(err));
+      setSwitcherLoading(false);
+    }
+  };
 
   const ws = useWebSocket();
 
@@ -586,6 +630,156 @@ export default function ConnectPage() {
                 {account.positions_count ?? 0}
               </li>
             </ul>
+          )}
+
+          {/* Switch-account control. Visible only when already linked.
+              Clicking it lists every account on the user's TradeLocker
+              session and lets them swap with one click — no password
+              re-entry. */}
+          {account?.connected && (
+            <div style={{ marginTop: "0.85rem" }}>
+              {!switcherOpen && (
+                <button
+                  type="button"
+                  onClick={openSwitcher}
+                  className="btn"
+                  style={{
+                    padding: "0.4rem 0.85rem",
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  switch account ↻
+                </button>
+              )}
+
+              {switcherOpen && (
+                <div
+                  role="region"
+                  aria-labelledby="switcher-heading"
+                  style={{
+                    marginTop: "0.5rem",
+                    padding: "0.6rem 0.75rem",
+                    border: "1px solid var(--accent-dim)",
+                    background: "rgba(255,255,255,0.02)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <div
+                    id="switcher-heading"
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                    }}
+                  >
+                    <span className="accent" style={{ fontWeight: 700, fontSize: "0.88rem" }}>
+                      pick a different account
+                    </span>
+                    <button
+                      type="button"
+                      onClick={closeSwitcher}
+                      aria-label="Close"
+                      className="dim"
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: "1rem",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {switcherLoading && (
+                    <p className="dim" style={{ fontSize: "0.82rem", margin: 0 }}>
+                      loading accounts…
+                    </p>
+                  )}
+
+                  {switcherErr && (
+                    <p role="alert" className="danger" style={{ fontSize: "0.82rem", margin: 0 }}>
+                      {switcherErr}
+                    </p>
+                  )}
+
+                  {switcherAccounts && switcherAccounts.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                      {switcherAccounts.map((a) => {
+                        const inactive = a.status && a.status !== "ACTIVE";
+                        const active = a.is_current;
+                        return (
+                          <button
+                            key={a.account_id}
+                            type="button"
+                            onClick={() => !active && !inactive && doSwitch(a.account_id)}
+                            disabled={switcherLoading || !!inactive || !!active}
+                            style={{
+                              padding: "0.4rem 0.6rem",
+                              display: "grid",
+                              gridTemplateColumns: "minmax(70px,90px) 1fr auto",
+                              gap: "0.5rem",
+                              alignItems: "center",
+                              textAlign: "left",
+                              background: active ? "rgba(0, 200, 83, 0.07)" : "transparent",
+                              border: `1px solid ${
+                                active ? "var(--accent)" : "var(--accent-dim)"
+                              }`,
+                              cursor:
+                                inactive || active ? "default" : "pointer",
+                              color: inactive ? "var(--dim)" : "inherit",
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            <span className="accent" style={{ fontWeight: 700 }}>
+                              {a.account_id}
+                            </span>
+                            <span>
+                              {a.name ? a.name.slice(0, 30) : "—"}
+                              {active ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.5rem",
+                                    fontSize: "0.7rem",
+                                    color: "var(--accent)",
+                                    letterSpacing: 1,
+                                  }}
+                                >
+                                  CURRENT
+                                </span>
+                              ) : null}
+                              {a.status && a.status !== "ACTIVE" ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.5rem",
+                                    fontSize: "0.7rem",
+                                    color: "var(--warn)",
+                                    letterSpacing: 1,
+                                  }}
+                                >
+                                  {a.status}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: "monospace",
+                                color: "var(--accent)",
+                              }}
+                            >
+                              ${(a.balance ?? 0).toFixed(2)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -228,6 +228,28 @@ export const api = {
     }),
   getAccountState: () =>
     request<AccountState>("/api/tradelocker/account"),
+  // Account switcher — list every account on the user's linked TradeLocker
+  // session + swap to a different one without re-entering credentials.
+  listTradeLockerAccounts: () =>
+    request<{
+      current_account_id: string | null;
+      env: string;
+      accounts: Array<{
+        account_id: string;
+        acc_num: string;
+        name?: string | null;
+        balance: number;
+        currency?: string | null;
+        status?: string | null;
+        type?: string | null;
+        is_current: boolean;
+      }>;
+    }>("/api/tradelocker/accounts"),
+  switchTradeLockerAccount: (accountId: string) =>
+    request<{ status: string; detail?: string }>("/api/tradelocker/switch-account", {
+      method: "POST",
+      body: JSON.stringify({ account_id: accountId }),
+    }),
   getAdvisor: (riskAppetite?: "conservative" | "balanced" | "aggressive") =>
     request<AdvisorResponse>(
       `/api/tradelocker/advisor${riskAppetite ? `?risk_appetite=${riskAppetite}` : ""}`,

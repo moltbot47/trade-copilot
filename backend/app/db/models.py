@@ -32,6 +32,7 @@ class StrategyType(str, enum.Enum):
     stoch_hook = "stoch_hook"
     latpfn_momentum = "latpfn_momentum"
     latpfn_quant = "latpfn_quant"
+    news_event = "news_event"
 
 
 class CohortStatus(str, enum.Enum):

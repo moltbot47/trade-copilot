@@ -187,6 +187,16 @@ class TradeLockerClient:
             "all_accounts": accounts,
         }
 
+    async def list_all_accounts(self, token: str) -> list[dict]:
+        """GET /auth/jwt/all-accounts using an existing access token.
+
+        Used by the switch-account flow so the user doesn't have to re-type
+        credentials just to see what accounts they have. Returns the same
+        shape `authenticate()` returns under the `all_accounts` key.
+        """
+        data = await self._request("GET", "/auth/jwt/all-accounts", token=token)
+        return data.get("accounts") or []
+
     async def refresh_access_token(self, refresh_token: str) -> dict:
         """POST /auth/jwt/refresh."""
         data = await self._request(

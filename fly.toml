@@ -45,5 +45,11 @@ destination = "/app/data"
 
 [[vm]]
 size = "shared-cpu-1x"
-memory = "256mb"
+# Bumped 256MB → 1024MB on 2026-05-11. The 256MB box was OOM-thrashing
+# under combined load (uvicorn + pandas + Discord gateway + WS relay +
+# strategy runner). Memory pressure made the asyncio loop unresponsive,
+# Fly's /health probe timed out, and the LB stopped routing traffic.
+# 1GB gives every process room to live without competing for pages.
+# Cost delta: ~+$1.50/mo.
+memory = "1024mb"
 cpus = 1

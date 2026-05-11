@@ -234,6 +234,145 @@ async def account_state(user: User = Depends(get_current_user)) -> TradeLockerAc
 
 
 # ---------------------------------------------------------------------
+# Account switcher — list + swap without re-typing credentials
+# ---------------------------------------------------------------------
+
+@router.get("/accounts")
+async def list_accounts(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """List every TradeLocker account available to the linked session.
+
+    Uses the user's saved access token (no password round-trip). If the
+    token has expired the broker call returns 401 and the user has to
+    /connect again — same recovery path as everywhere else.
+
+    Response shape mirrors the 409 picker payload from /connect so the
+    frontend can reuse the same component.
+    """
+    if not user.tradelocker_token:
+        raise HTTPException(status_code=400, detail="no broker linked")
+    token = decrypt(user.tradelocker_token)
+    if not token:
+        raise HTTPException(status_code=400, detail="broker token unreadable")
+
+    client = TradeLockerClient(env=user.tradelocker_env or "demo")
+    try:
+        accounts = await client.list_all_accounts(token)
+    except TradeLockerError as exc:
+        logger.info("list_accounts upstream error: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Broker is not responding. Try /connect again to refresh your session.",
+        )
+
+    current_id = str(user.tradelocker_account_id or "")
+    return {
+        "current_account_id": current_id or None,
+        "env": user.tradelocker_env or "demo",
+        "accounts": [
+            {
+                "account_id": str(a.get("id")),
+                "acc_num": str(a.get("accNum")),
+                "name": a.get("name"),
+                "balance": float(a.get("accountBalance", 0) or 0),
+                "currency": a.get("currency"),
+                "status": a.get("status"),
+                "type": a.get("accountType"),
+                "is_current": str(a.get("id")) == current_id,
+            }
+            for a in accounts
+        ],
+    }
+
+
+@router.post("/switch-account", response_model=StatusResponse)
+async def switch_account(
+    payload: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StatusResponse:
+    """Swap the linked account to a different one from the same session.
+
+    No re-auth required — uses the saved access token to refresh the
+    account list, validates that `payload.account_id` is in the list,
+    then updates the User row + restarts the relay.
+    """
+    target_account_id = str(payload.get("account_id", "")).strip()
+    if not target_account_id:
+        raise HTTPException(status_code=400, detail="account_id is required")
+
+    if not user.tradelocker_token:
+        raise HTTPException(status_code=400, detail="no broker linked")
+    token = decrypt(user.tradelocker_token)
+    if not token:
+        raise HTTPException(status_code=400, detail="broker token unreadable")
+
+    client = TradeLockerClient(env=user.tradelocker_env or "demo")
+    try:
+        accounts = await client.list_all_accounts(token)
+    except TradeLockerError as exc:
+        logger.info("switch_account upstream error: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Broker is not responding. Try /connect again to refresh.",
+        )
+
+    chosen = next((a for a in accounts if str(a.get("id")) == target_account_id), None)
+    if chosen is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"account_id {target_account_id!r} is not in your TradeLocker "
+                f"account list. Refresh and try again."
+            ),
+        )
+
+    # Stop the existing relay before the swap so it doesn't keep pulling
+    # state from the old account_id.
+    try:
+        from app.ws.relay_manager import relay_manager
+        await relay_manager.stop_for_user(user.id)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("relay stop on switch_account failed (non-fatal): %s", exc)
+
+    try:
+        user.tradelocker_account_id = str(chosen.get("id"))
+        user.tradelocker_acc_num = str(chosen.get("accNum") or "1")
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("switch_account: persist failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not save the swap. Try again.")
+
+    # Boot a relay against the new account.
+    try:
+        from app.ws.relay_manager import relay_manager
+        relay_manager.start_for_user(user.id)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("relay_manager.start_for_user skipped: %s", exc)
+
+    # Admin Discord alert — useful for the operator to see when an
+    # account swap happens.
+    try:
+        from app.integrations.discord_signals import post_admin_event_fire_and_forget
+        post_admin_event_fire_and_forget(
+            event="broker_reconnect",
+            user_email=user.email,
+            details={
+                "broker": "Genesis FX",
+                "env": user.tradelocker_env or "demo",
+                "account_id": user.tradelocker_account_id or "?",
+                "via": "switch_account",
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("admin alert (switch_account) skipped: %s", exc)
+
+    return StatusResponse(status="switched", detail=user.tradelocker_account_id or "")
+
+
+# ---------------------------------------------------------------------
 # Tiny-account advisor
 # ---------------------------------------------------------------------
 
