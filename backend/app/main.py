@@ -130,6 +130,10 @@ def _apply_lightweight_migrations() -> None:
         ("users", "failed_login_count", "INTEGER DEFAULT 0"),
         ("users", "locked_until", "DATETIME DEFAULT NULL"),
         ("users", "discord_webhook_url", "TEXT DEFAULT NULL"),
+        # Per-user instrument filter on subscriptions (NULL = all of bot's
+        # instruments). Mirrored as Alembic 0002, but live DBs that were
+        # stamped before that migration existed will pick it up here.
+        ("subscriptions", "allowed_instruments", "VARCHAR(512) DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
