@@ -18,8 +18,14 @@ export type Subscription = {
   bot_id: number;
   bot_slug?: string;
   bot_name?: string;
-  aggression: number; // 1-10
-  paused: boolean;
+  // Field names mirror the backend response (snake_case) exactly. Previously
+  // this type used `aggression` / `paused`, which silently never matched the
+  // server's response — every read returned undefined and the slider showed
+  // its default `5` regardless of saved value.
+  aggression_level: number; // 1-10
+  is_paused: boolean;
+  // None = subscribe to all of the bot's instruments (legacy default).
+  allowed_instruments?: string[] | null;
   created_at?: string;
 };
 

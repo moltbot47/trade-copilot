@@ -1,0 +1,22 @@
+# Default: all PRs route to @moltbot47 (sole maintainer).
+* @moltbot47
+
+# Trading & strategy code — even more careful review.
+/backend/app/core/risk_engine.py         @moltbot47
+/backend/app/core/signal_router.py       @moltbot47
+/backend/app/core/tradelocker_client.py  @moltbot47
+/backend/app/strategies/                 @moltbot47
+
+# Security-sensitive surfaces.
+/backend/app/api/auth.py        @moltbot47
+/backend/app/auth/              @moltbot47
+/backend/app/core/crypto.py     @moltbot47
+/backend/app/core/jwt.py        @moltbot47
+/backend/app/core/webhook_signing.py @moltbot47
+
+# Deploy + infra.
+/.github/workflows/  @moltbot47
+/Dockerfile.*        @moltbot47
+/fly.toml            @moltbot47
+/backend/fly.*.toml  @moltbot47
+/backend/migrations/ @moltbot47

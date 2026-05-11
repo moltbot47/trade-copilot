@@ -126,7 +126,7 @@ export default function DashboardPage() {
 
   const updateAggression = async (subId: number, aggression: number) => {
     setSubs((curr) =>
-      curr.map((s) => (s.id === subId ? { ...s, aggression } : s))
+      curr.map((s) => (s.id === subId ? { ...s, aggression_level: aggression } : s))
     );
     try {
       if (ws.status === "open") {
@@ -135,7 +135,7 @@ export default function DashboardPage() {
           aggression_level: aggression,
         });
       } else {
-        await api.updateSubscription(subId, { aggression });
+        await api.updateSubscription(subId, { aggression_level: aggression });
       }
     } catch (err) {
       setSubsErr((err as Error).message);
@@ -143,9 +143,9 @@ export default function DashboardPage() {
   };
 
   const togglePause = async (sub: Subscription) => {
-    const next = !sub.paused;
+    const next = !sub.is_paused;
     setSubs((curr) =>
-      curr.map((s) => (s.id === sub.id ? { ...s, paused: next } : s))
+      curr.map((s) => (s.id === sub.id ? { ...s, is_paused: next } : s))
     );
     try {
       if (ws.status === "open") {
@@ -154,13 +154,13 @@ export default function DashboardPage() {
           paused: next,
         });
       } else {
-        await api.updateSubscription(sub.id, { paused: next });
+        await api.updateSubscription(sub.id, { is_paused: next });
       }
     } catch (err) {
       setSubsErr((err as Error).message);
       // revert
       setSubs((curr) =>
-        curr.map((s) => (s.id === sub.id ? { ...s, paused: !next } : s))
+        curr.map((s) => (s.id === sub.id ? { ...s, is_paused: !next } : s))
       );
     }
   };
@@ -278,17 +278,17 @@ export default function DashboardPage() {
                     style={{
                       padding: "0.25rem 0.6rem",
                       fontSize: "0.75rem",
-                      borderColor: s.paused ? "var(--warn)" : "var(--accent-dim)",
-                      color: s.paused ? "var(--warn)" : "var(--accent)",
+                      borderColor: s.is_paused ? "var(--warn)" : "var(--accent-dim)",
+                      color: s.is_paused ? "var(--warn)" : "var(--accent)",
                     }}
                   >
-                    {s.paused ? "paused" : "running"}
+                    {s.is_paused ? "paused" : "running"}
                   </button>
                 </div>
                 <RiskSlider
-                  value={s.aggression}
+                  value={s.aggression_level}
                   onChange={(v) => updateAggression(s.id, v)}
-                  disabled={s.paused}
+                  disabled={s.is_paused}
                 />
               </div>
             );

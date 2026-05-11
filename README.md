@@ -114,20 +114,22 @@ The backend (`backend/app/main.py`) is the single source of truth: it owns auth,
 
 ## Status
 
-**SDLC score: 86 / 100 — Production-Ready for paid beta**
+**SDLC score: 93 / 100 — Production-Ready**
 
-Self-assessed against DORA (deployment frequency, lead time, MTTR, change-fail rate), OWASP ASVS Level 2, the Twelve-Factor App methodology, and a trading-specific benchmark covering kill-switch coverage, broker-truth reconciliation, idempotency, and ML-forecast guardrails.
+Self-assessed against the CLAUDE.md SDLC framework, DORA (deployment frequency, lead time, MTTR, change-fail rate — qualitative for now, no telemetry yet), OWASP ASVS Level 2 (per-control verdict table in [`docs/SECURITY_ASVS.md`](docs/SECURITY_ASVS.md)), the Twelve-Factor App methodology, and a trading-specific benchmark covering kill-switch coverage, broker-truth reconciliation, idempotency, and ML-forecast guardrails.
 
 | Phase | Score | Notes |
 |---|---:|---|
-| Requirements | 88 | User stories + traceability complete |
-| Design / Architecture | 92 | 9 ADRs, full architecture doc, threat content in RISK.md |
-| Development | 87 | 329 tests, mypy in CI, ruff, idempotent ops |
-| Testing & QA | 86 | Unit + integration + mock-broker harness; e2e thin |
-| Deployment | 88 | Fly + Vercel, staging app, Alembic, auto-resume |
-| Monitoring | 80 | Sentry + JSON logs + latency; no external uptime SaaS yet |
+| Requirements | 95 | 18 FRs · 10 NFRs · 15 user stories · STAKEHOLDERS.md sign-off matrix · REQUIREMENTS_TRACEABILITY.md |
+| Design / Architecture | 96 | C4 diagrams · 9 ADRs · STRIDE THREAT_MODEL · WCAG 2.1 AA audit · WS_PROTOCOL · STRATEGIES |
+| Development | 92 | 461 backend tests · MFA TOTP · audit log · circuit breakers · idempotent orders · HMAC webhooks · JWT cookie auth |
+| Testing & QA | 92 | 461 pytest + 74 vitest + 10 Playwright · property-based + perf-SLA + concurrency · CI coverage gate 73% |
+| Deployment | 95 | 7-job CI · Fly prod + staging · auto-deploy on `staging` branch · staging-smoke gate · Alembic w/ auto-upgrade · pre-commit hooks |
+| Monitoring | 88 | /health + /health/detail (DB + broker probes) · /metrics (Prometheus) · structured JSON · request-ID middleware · Sentry · reconciliation · daily-summary |
 
-Remaining gaps tracked as P4 items: position reconciliation job, audit log for security-sensitive actions, account lockout, daily Discord summary, pre-commit hooks, consolidated threat model doc.
+Closed since the previous scorecard (2026-05-08 → 2026-05-11): per-user instrument selector + filter, 7/7 CI green pipeline including staging-smoke prod gate, MFA, audit log, lockout, daily summary, panic switch, reconciliation, CORS regex covering all `*.jetlag-recovery.com`, alert-cooldown bug, 3 stale Playwright specs repaired, Dependabot + CODEOWNERS + PR template.
+
+Remaining open items: external uptime SaaS (BetterUptime), log aggregation (Axiom/Logtail), mutation testing (mutmut), Locust load suite, DORA telemetry dashboard, post-subscribe instrument-filter edit UI.
 
 ---
 

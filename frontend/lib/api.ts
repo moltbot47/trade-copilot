@@ -215,7 +215,7 @@ export const api = {
     }),
   updateSubscription: (
     subId: number,
-    patch: Partial<Pick<Subscription, "aggression" | "paused">>
+    patch: Partial<Pick<Subscription, "aggression_level" | "is_paused" | "allowed_instruments">>
   ) =>
     request<Subscription>(`/api/subscriptions/${subId}`, {
       method: "PATCH",

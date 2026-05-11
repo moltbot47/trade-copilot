@@ -1,0 +1,96 @@
+# Dependabot config — weekly dependency PRs.
+#
+# Why weekly: daily PRs add too much review noise; security-only would
+# miss benign feature updates that compound into painful bumps. Weekly
+# is the standard cadence for a single-maintainer repo.
+#
+# All updates open PRs against `main` and respect branch protection
+# (lint/mypy/test/e2e/docker/staging-smoke must pass before merge).
+version: 2
+
+updates:
+  # ---------- Python backend ----------
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "moltbot47"
+    labels:
+      - "deps"
+      - "backend"
+    commit-message:
+      prefix: "deps(backend)"
+      include: "scope"
+    groups:
+      # Bundle minor + patch bumps into one PR per group to keep review noise low.
+      fastapi-stack:
+        patterns:
+          - "fastapi"
+          - "starlette"
+          - "uvicorn*"
+          - "pydantic*"
+      sqlalchemy-stack:
+        patterns:
+          - "sqlalchemy"
+          - "alembic"
+          - "psycopg2*"
+      test-stack:
+        patterns:
+          - "pytest*"
+          - "respx"
+          - "hypothesis"
+
+  # ---------- Frontend ----------
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "moltbot47"
+    labels:
+      - "deps"
+      - "frontend"
+    commit-message:
+      prefix: "deps(frontend)"
+      include: "scope"
+    groups:
+      next-stack:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+          - "eslint*"
+          - "vitest"
+          - "@testing-library/*"
+          - "@playwright/*"
+
+  # ---------- GitHub Actions ----------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "moltbot47"
+    labels:
+      - "deps"
+      - "ci"
+    commit-message:
+      prefix: "deps(ci)"
