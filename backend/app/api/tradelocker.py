@@ -81,6 +81,9 @@ async def connect(
 
     # Stop any existing relay BEFORE we swap credentials so it doesn't
     # keep using stale tokens. Idempotent — no-op if no relay is running.
+    # Snapshot "was this a reconnect?" first — used for the admin alert
+    # so we can distinguish first connect from reconnect-with-same-broker.
+    was_already_connected = bool(user.tradelocker_account_id)
     try:
         from app.ws.relay_manager import relay_manager
 
@@ -113,6 +116,23 @@ async def connect(
         relay_manager.start_for_user(user.id)
     except Exception as exc:  # pragma: no cover
         logger.debug("relay_manager.start_for_user skipped: %s", exc)
+
+    # Admin Discord alert — distinguishes first connect from reconnect so
+    # the operator can react to genuinely new users without being spammed.
+    try:
+        from app.integrations.discord_signals import post_admin_event_fire_and_forget
+
+        post_admin_event_fire_and_forget(
+            event="broker_connect" if not was_already_connected else "broker_reconnect",
+            user_email=user.email,
+            details={
+                "broker": "Genesis FX",
+                "env": user.tradelocker_env or "demo",
+                "account_id": user.tradelocker_account_id or "?",
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — never block connect on Discord
+        logger.debug("admin alert (broker_connect) skipped: %s", exc)
 
     return StatusResponse(status="connected", detail=user.tradelocker_account_id or "")
 

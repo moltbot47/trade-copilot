@@ -84,6 +84,11 @@ def login(
     from fastapi import HTTPException, status as http_status
 
     settings = get_settings()
+    # Detect signup vs. returning login BEFORE create — used for the admin
+    # Discord alert further down. Cheap pre-query; the row state is unchanged.
+    is_new_signup = (
+        db.query(User).filter(User.email == str(payload.email)).first() is None
+    )
     user = get_or_create_user(db, str(payload.email))
     from app.core.audit import record_audit
     from datetime import datetime, timedelta
@@ -146,6 +151,23 @@ def login(
     user.locked_until = None
     record_audit(db, user=user, action="login_success", client_ip=client_ip)
     db.commit()
+
+    # Fire-and-forget admin Discord alert. Goes to the global operator
+    # webhook (DISCORD_WEBHOOK_URL). Per-user webhooks are explicitly NOT
+    # used here — that would leak the customer base to each customer.
+    try:
+        from app.integrations.discord_signals import post_admin_event_fire_and_forget
+
+        post_admin_event_fire_and_forget(
+            event="signup" if is_new_signup else "login",
+            user_email=user.email,
+            details={
+                "from_ip": client_ip or "?",
+                "user_id": str(user.id),
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — never block login on Discord
+        logger.debug("admin alert (login/signup) skipped: %s", exc)
 
     # Boot the TradeLocker relay if the user has a stored token.
     # Best-effort — failures here must not block login.

@@ -32,6 +32,7 @@ import asyncio
 import logging
 import os
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -312,3 +313,85 @@ def post_decision_fire_and_forget(**kwargs: Any) -> None:
     if not loop.is_running():
         return
     asyncio.ensure_future(post_decision(**kwargs))
+
+
+# -----------------------------------------------------------------------
+# Admin-event alerts — signup, login, broker connect
+# -----------------------------------------------------------------------
+#
+# These post to the GLOBAL DISCORD_WEBHOOK_URL (operator/signals channel),
+# never to a per-user webhook. Per-user routing would leak the operator's
+# customer base to each customer, which is the wrong privacy model.
+#
+# Every post is best-effort + fire-and-forget — login latency must not
+# block on a Discord round trip, and a Discord outage must not cascade
+# into the auth flow.
+
+# Visual styling for each admin event. Color is Discord embed color.
+_ADMIN_EVENT_STYLE: dict[str, tuple[str, int]] = {
+    "signup":         ("🆕 **New signup**",          0x4CAF50),  # green
+    "login":          ("🔑 Login",                   0x546E7A),  # muted blue-grey
+    "broker_connect": ("🔌 **Broker connected**",    0x00BCD4),  # cyan
+    "broker_reconnect": ("🔁 Broker reconnected",    0x546E7A),  # muted
+}
+
+
+async def post_admin_event(
+    event: str,
+    *,
+    user_email: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    """Send an admin-channel notification for a notable user event.
+
+    ``event`` is one of the keys in ``_ADMIN_EVENT_STYLE`` (signup, login,
+    broker_connect, broker_reconnect). Unknown events are posted with a
+    neutral style so we never silently drop a future event type.
+    """
+    url = _webhook_url()  # global only — see module-level comment
+    if not url:
+        return  # admin alerts disabled (no DISCORD_WEBHOOK_URL configured)
+
+    label, color = _ADMIN_EVENT_STYLE.get(event, (f"ℹ️ {event}", 0x9E9E9E))
+    fields: list[dict[str, Any]] = [
+        {"name": "User", "value": f"`{user_email}`", "inline": True},
+    ]
+    if details:
+        for k, v in details.items():
+            # Trim long values so the embed renders cleanly on mobile.
+            s = str(v)
+            if len(s) > 256:
+                s = s[:253] + "…"
+            fields.append({"name": k, "value": s, "inline": True})
+
+    embed = {
+        "title": label,
+        "color": color,
+        "fields": fields,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            r = await client.post(url, json={"embeds": [embed]})
+            if r.status_code >= 400:
+                logger.warning(
+                    "discord admin alert returned %s for %s/%s: %s",
+                    r.status_code, event, user_email, r.text[:200],
+                )
+    except Exception as exc:  # noqa: BLE001 — never block auth on Discord
+        logger.warning("discord admin alert (%s/%s) failed: %s", event, user_email, exc)
+
+
+def post_admin_event_fire_and_forget(**kwargs: Any) -> None:
+    """Schedule post_admin_event on the running loop without awaiting.
+
+    Use from sync endpoint handlers — login / connect endpoints are sync.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        return
+    if not loop.is_running():
+        return
+    asyncio.ensure_future(post_admin_event(**kwargs))
