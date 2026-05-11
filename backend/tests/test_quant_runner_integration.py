@@ -16,12 +16,11 @@ math (TradeManager) and HTTP-level (TradeLockerClient) had tests.
 """
 from __future__ import annotations
 
-import asyncio
 import pandas as pd
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
-from app.db.models import User, Bot, StrategyType, StrategyState
+from app.db.models import User, StrategyType, StrategyState
 from app.strategies.runner import QuantRunner
 from app.strategies.data_feed import BarFetcher
 from app.strategies.quant_strategy import LatPFNQuantStrategy

@@ -27,10 +27,15 @@ describe("BotCard", () => {
     expect(screen.getByText("orb")).toBeInTheDocument();
   });
 
-  it("renders Subscribe link with bot slug", () => {
+  it("renders Subscribe button and connect-broker fallback link with bot slug", () => {
     render(<BotCard bot={fullBot} />);
-    const link = screen.getByRole("link", { name: /subscribe/i });
-    expect(link).toHaveAttribute(
+    // Subscribe is now a button that opens the modal (or routes via EmailGate)
+    expect(
+      screen.getByRole("button", { name: /subscribe/i }),
+    ).toBeInTheDocument();
+    // The escape-hatch "connect broker first" link still carries the bot slug
+    const connectLink = screen.getByRole("link", { name: /connect broker first/i });
+    expect(connectLink).toHaveAttribute(
       "href",
       "/connect?bot=orb-breakout",
     );

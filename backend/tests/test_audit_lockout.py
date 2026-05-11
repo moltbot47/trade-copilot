@@ -5,7 +5,6 @@ import json
 from datetime import datetime, timedelta
 
 import pyotp
-import pytest
 
 from app.auth.mfa import encrypt_secret, generate_secret
 from app.core.audit import record_audit

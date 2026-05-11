@@ -19,7 +19,7 @@ and error semantics so tests catch real-world contract drift.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 from app.core.tradelocker_client import TradeLockerError
 

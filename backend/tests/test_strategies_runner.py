@@ -277,7 +277,7 @@ def test_kill_switch_fail_soft_on_empty_state(db_session, seed_bots):
 # ============================================================================
 
 from datetime import datetime, timedelta
-from app.db.models import TradeOutcome, Signal, Execution, ExecutionStatus, Bot
+from app.db.models import TradeOutcome, Signal, Execution, ExecutionStatus
 
 
 def _make_loss_outcome(db_session, bot_id, user_id, pnl=-5.0, signal_id=None):

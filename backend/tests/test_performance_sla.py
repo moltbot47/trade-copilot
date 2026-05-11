@@ -36,7 +36,7 @@ from sqlalchemy.pool import StaticPool
 import app.db.models  # noqa: F401  — register on Base
 from app.core.tradelocker_client import TradeLockerClient
 from app.db.database import Base
-from app.db.models import Bot, CohortStatus, StrategyType, TradeOutcome, User
+from app.db.models import Bot, StrategyType, TradeOutcome, User
 from app.strategies.exhaustion_filter import compute_rsi, passes_no_chase
 from app.strategies.performance_tracker import PerformanceTracker
 from app.strategies.trade_manager import TradeManager

@@ -1,9 +1,8 @@
 """Tests for per-user Discord webhook URLs."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from app.db.models import User
 

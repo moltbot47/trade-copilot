@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from app.db.models import (
-    Bot, CohortStatus, StrategyType, TradeOutcome, User,
+    CohortStatus, StrategyType, TradeOutcome, User,
 )
 from app.strategies.trade_manager import TradeManager
 from tests.fixtures.mock_broker import MockBroker

@@ -25,7 +25,6 @@ from app.db.models import (
     Execution,
     ExecutionStatus,
     Signal,
-    StrategyType,
     Subscription,
     User,
 )

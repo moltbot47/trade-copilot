@@ -54,3 +54,25 @@ module = [
     "numpy.*",
 ]
 ignore_missing_imports = true
+
+[tool.ruff]
+# Project-wide ruff config. Source code in `app/` is held to the default
+# strict ruleset; test files allow compact compound statements and
+# late-bound imports that are common in pytest setups.
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "E402",  # imports after non-import code — common for SQLAlchemy declarative setup in tests
+    "E702",  # multi-statement on one line — common for compact User(...).flush() setup
+    "E741",  # short loop names like `l`, `e` — fine in test scaffolding
+    "F401",  # unused imports — fixtures may register side-effects on import
+    "F841",  # unused locals — assignments for readability
+]
+"scripts/**/*.py" = [
+    "E402",
+    "E702",
+    "E741",
+    "F401",
+    "F541",  # f-strings without placeholders — log message scaffolds
+    "F841",
+]
