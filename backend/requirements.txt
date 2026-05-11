@@ -28,6 +28,12 @@ prometheus-client>=0.20.0
 # --- interactive Discord bot (optional — runs only if DISCORD_BOT_TOKEN set) ---
 discord.py>=2.4.0
 
+# --- multi-instrument LaT-PFN scan ---
+# yfinance is the simplest public source for 1H bars across the FX/index/
+# crypto majors. Only used by app.integrations.latpfn_scan; the runner
+# never depends on it.
+yfinance>=0.2.40
+
 # --- testing ---
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

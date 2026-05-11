@@ -46,6 +46,17 @@ export type AccountState = {
 
 export type RiskAppetite = "conservative" | "balanced" | "aggressive";
 
+export type UserOut = {
+  id: number;
+  email: string;
+  created_at: string;
+  is_active: boolean;
+  max_daily_loss_pct: number;
+  risk_appetite: RiskAppetite;
+  tradelocker_account_id?: string | null;
+  tradelocker_env: string;
+};
+
 export type AdvisorPreset = {
   label: string;
   description: string;

@@ -7,6 +7,7 @@ import EmailGate from "@/components/EmailGate";
 import RiskSlider from "@/components/RiskSlider";
 import PnLChart from "@/components/PnLChart";
 import SignalLog from "@/components/SignalLog";
+import InstrumentFilterModal from "@/components/InstrumentFilterModal";
 import type {
   AccountState,
   Subscription,
@@ -23,6 +24,8 @@ export default function DashboardPage() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [bots, setBots] = useState<Record<number, Bot>>({});
   const [subsErr, setSubsErr] = useState<string | null>(null);
+  // When non-null, the InstrumentFilterModal opens for this subscription.
+  const [editingFilterSubId, setEditingFilterSubId] = useState<number | null>(null);
 
   const [pnl, setPnl] = useState<PnLPoint[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
@@ -290,11 +293,63 @@ export default function DashboardPage() {
                   onChange={(v) => updateAggression(s.id, v)}
                   disabled={s.is_paused}
                 />
+                {/* Instrument filter status + edit. The filter is per-user
+                    (not per-bot) so this stays close to the slider, which
+                    is the other per-user knob on this subscription. */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    marginTop: "0.5rem",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  <span className="dim">
+                    {s.allowed_instruments && s.allowed_instruments.length > 0
+                      ? `filter: ${s.allowed_instruments.join(", ")}`
+                      : "filter: all instruments"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingFilterSubId(s.id)}
+                    className="dim"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      fontSize: "0.78rem",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    edit instruments
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       </section>
+
+      {/* Edit-instruments modal */}
+      {editingFilterSubId !== null && (() => {
+        const sub = subs.find((x) => x.id === editingFilterSubId);
+        if (!sub) return null;
+        return (
+          <InstrumentFilterModal
+            sub={sub}
+            bot={bots[sub.bot_id]}
+            onClose={() => setEditingFilterSubId(null)}
+            onSaved={(updated) => {
+              setSubs((curr) =>
+                curr.map((x) => (x.id === updated.id ? updated : x)),
+              );
+              setEditingFilterSubId(null);
+            }}
+          />
+        );
+      })()}
 
       {/* PnL + Signals */}
       <section className="card">

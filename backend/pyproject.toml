@@ -52,6 +52,8 @@ module = [
     "pandas.*",
     "numpy",
     "numpy.*",
+    "yfinance",
+    "yfinance.*",
 ]
 ignore_missing_imports = true
 

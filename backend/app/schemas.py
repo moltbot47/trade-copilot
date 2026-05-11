@@ -20,6 +20,7 @@ class UserOut(BaseModel):
     created_at: datetime
     is_active: bool
     max_daily_loss_pct: float
+    risk_appetite: str = "balanced"
     tradelocker_account_id: Optional[str] = None
     tradelocker_env: str = "demo"
 

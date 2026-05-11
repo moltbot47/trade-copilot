@@ -10,6 +10,7 @@ import type {
   StrategyEquityResponse,
   StrategyState,
   AdvisorResponse,
+  UserOut,
 } from "./types";
 
 const BASE_URL =
@@ -231,6 +232,14 @@ export const api = {
     request<AdvisorResponse>(
       `/api/tradelocker/advisor${riskAppetite ? `?risk_appetite=${riskAppetite}` : ""}`,
     ),
+
+  // User preferences
+  getMe: () => request<UserOut>("/api/users/me"),
+  updateMe: (patch: { risk_appetite?: "conservative" | "balanced" | "aggressive" }) =>
+    request<UserOut>("/api/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 
   // Subscriptions
   getSubscriptions: () => request<Subscription[]>("/api/subscriptions"),

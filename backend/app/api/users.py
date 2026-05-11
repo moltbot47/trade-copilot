@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import secrets
+from typing import Optional
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -110,6 +111,34 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
 
 @router.get("/me", response_model=UserOut)
 def read_me(user: User = Depends(get_current_user)) -> UserOut:
+    return UserOut.model_validate(user)
+
+
+# ----- Risk appetite preference -----
+
+class UserUpdate(BaseModel):
+    """Patch payload for /users/me. Only fields explicitly listed are
+    mutable from the API; everything else is read-only or admin-set."""
+    risk_appetite: Optional[str] = None
+
+
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    payload: UserUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    """Update the current user's editable preferences."""
+    if payload.risk_appetite is not None:
+        appetite = payload.risk_appetite.lower()
+        if appetite not in {"conservative", "balanced", "aggressive"}:
+            raise HTTPException(
+                status_code=400,
+                detail="risk_appetite must be one of: conservative, balanced, aggressive",
+            )
+        user.risk_appetite = appetite
+    db.commit()
+    db.refresh(user)
     return UserOut.model_validate(user)
 
 

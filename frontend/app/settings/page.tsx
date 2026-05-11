@@ -4,10 +4,32 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import EmailGate from "@/components/EmailGate";
+import type { RiskAppetite } from "@/lib/types";
+
+const APPETITE_OPTIONS: { value: RiskAppetite; label: string; description: string }[] = [
+  {
+    value: "conservative",
+    label: "conservative",
+    description: "≥1.5σ entries · 2:1 R:R · 30% margin cap per pair",
+  },
+  {
+    value: "balanced",
+    label: "balanced",
+    description: "≥0.8σ entries · 1.5:1 R:R · 50% margin cap per pair",
+  },
+  {
+    value: "aggressive",
+    label: "aggressive",
+    description: "≥0.3σ entries · 1:1 R:R · 75% margin cap · tiny-account compounding",
+  },
+];
 
 export default function SettingsHome() {
   const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
   const [webhookSet, setWebhookSet] = useState<boolean | null>(null);
+  const [appetite, setAppetite] = useState<RiskAppetite | null>(null);
+  const [savingAppetite, setSavingAppetite] = useState(false);
+  const [appetiteErr, setAppetiteErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -23,8 +45,30 @@ export default function SettingsHome() {
       } catch {
         setWebhookSet(null);
       }
+      try {
+        const me = await api.getMe();
+        setAppetite(me.risk_appetite);
+      } catch {
+        setAppetite(null);
+      }
     })();
   }, []);
+
+  const saveAppetite = async (next: RiskAppetite) => {
+    if (next === appetite) return;
+    const previous = appetite;
+    setAppetite(next); // optimistic
+    setAppetiteErr(null);
+    setSavingAppetite(true);
+    try {
+      await api.updateMe({ risk_appetite: next });
+    } catch (e) {
+      setAppetite(previous);
+      setAppetiteErr((e as Error).message ?? "save failed");
+    } finally {
+      setSavingAppetite(false);
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -37,6 +81,63 @@ export default function SettingsHome() {
           <span className="accent">Settings</span>
         </h1>
       </header>
+
+      {/* Risk appetite — inline (no nav). Drives the advisor's defaults +
+          (once shipped) the LaT-PFN strategy threshold + TP curve. */}
+      <section className="card" style={{ padding: "1.25rem" }}>
+        <div style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.25rem" }}>
+          Risk appetite
+        </div>
+        <div className="dim" style={{ fontSize: "0.88rem", marginBottom: "0.85rem" }}>
+          Drives the tiny-account advisor's recommendations and the LaT-PFN
+          entry threshold. You can change it any time.
+        </div>
+        <div
+          role="radiogroup"
+          aria-label="Risk appetite"
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+            marginBottom: "0.6rem",
+          }}
+        >
+          {APPETITE_OPTIONS.map((opt) => {
+            const active = appetite === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={savingAppetite || appetite === null}
+                onClick={() => saveAppetite(opt.value)}
+                className="btn"
+                style={{
+                  padding: "0.4rem 0.95rem",
+                  fontSize: "0.88rem",
+                  borderColor: active ? "var(--accent)" : "var(--accent-dim)",
+                  color: active ? "var(--accent)" : "var(--dim)",
+                  fontWeight: active ? 700 : 400,
+                  cursor: savingAppetite ? "wait" : "pointer",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        {appetite && (
+          <div className="dim" style={{ fontSize: "0.82rem" }}>
+            {APPETITE_OPTIONS.find((o) => o.value === appetite)?.description}
+          </div>
+        )}
+        {appetiteErr && (
+          <div className="danger" style={{ fontSize: "0.82rem", marginTop: "0.4rem" }}>
+            could not save: {appetiteErr}
+          </div>
+        )}
+      </section>
 
       <SettingsCard
         title="Discord notifications"

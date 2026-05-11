@@ -56,18 +56,22 @@ class LatPFNMomentumStrategy(Strategy):
         bot_id: int,
         timeframe: str,
         latpfn_client: LaTPFNClient,
-        threshold: float = 1.5,
+        threshold: float = 0.8,
         atr_period: int = 14,
         n_predict: int = 12,
         base_qty: float = 0.01,
+        target_rr: float = 1.5,
     ) -> None:
         self.bot_id = bot_id
         self.timeframe = timeframe
         self.latpfn_client = latpfn_client
+        # Lowered default 1.5σ → 0.8σ to align with the balanced appetite
+        # preset that ships as the new default risk_appetite.
         self.threshold = float(threshold)
         self.atr_period = int(atr_period)
         self.n_predict = int(n_predict)
         self.base_qty = float(base_qty)
+        self.target_rr = float(target_rr)
 
     async def on_bar(
         self, symbol: str, bars: pd.DataFrame
@@ -103,16 +107,18 @@ class LatPFNMomentumStrategy(Strategy):
 
         side = "buy" if mean_drift > 0 else "sell"
 
-        if side == "buy":
-            sl = current - atr
-            tp_unclipped = float(mean[-1])
-            tp = min(tp_unclipped, current + 3.0 * atr)
-            tp = max(tp, current + 0.1 * atr)  # keep TP above entry
-        else:
-            sl = current + atr
-            tp_unclipped = float(mean[-1])
-            tp = max(tp_unclipped, current - 3.0 * atr)
-            tp = min(tp, current - 0.1 * atr)  # keep TP below entry
+        # Confidence-scaled TP/SL via the shared tp_scaler. See
+        # app.strategies.tp_scaler.compute_tp_sl for the σ→% curve.
+        from app.strategies.tp_scaler import compute_tp_sl
+        levels = compute_tp_sl(
+            side=side,
+            current_price=current,
+            atr=atr,
+            confidence=confidence,
+            target_rr=getattr(self, "target_rr", 1.5),
+        )
+        sl = levels.stop_loss
+        tp = levels.take_profit
 
         return StrategySignal(
             symbol=symbol,
@@ -129,5 +135,7 @@ class LatPFNMomentumStrategy(Strategy):
                 "forecast_mean_endpoint": float(mean[-1]),
                 "forecast_avg_std": float(np.mean(std)),
                 "n_predict": self.n_predict,
+                "tp_pct": float(levels.tp_pct),
+                "rr": float(levels.rr),
             },
         )

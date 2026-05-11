@@ -42,18 +42,25 @@ class LatPFNQuantStrategy(Strategy):
         bot_id: int,
         timeframe: str,
         latpfn_client: LaTPFNClient,
-        threshold: float = 1.5,
+        threshold: float = 0.8,
         atr_period: int = 14,
         n_predict: int = 12,
         base_qty: float = 0.01,
+        target_rr: float = 1.5,
     ) -> None:
         self.bot_id = bot_id
         self.timeframe = timeframe
         self.latpfn_client = latpfn_client
+        # Lowered default threshold from 1.5 → 0.8 to match the balanced
+        # appetite preset (= the new default risk_appetite). Conservative
+        # accounts get 1.5σ via the appetite preset; aggressive gets 0.3σ.
         self.threshold = float(threshold)
         self.atr_period = int(atr_period)
         self.n_predict = int(n_predict)
         self.base_qty = float(base_qty)
+        # Target reward-to-risk. SL distance is derived from this so a
+        # 5% TP target at 1.5:1 means a 3.33% SL. ATR-floor still applies.
+        self.target_rr = float(target_rr)
         # Optional hook — embedded callers that bypass QuantRunner can attach
         # a TradeManager so on_bar() runs the trailing ratchet directly.
         self._trade_manager = None
@@ -129,16 +136,21 @@ class LatPFNQuantStrategy(Strategy):
 
         side = "buy" if mean_drift > 0 else "sell"
 
-        if side == "buy":
-            sl = current - atr
-            tp_unclipped = float(mean[-1])
-            tp = min(tp_unclipped, current + 3.0 * atr)
-            tp = max(tp, current + 0.5 * atr)
-        else:
-            sl = current + atr
-            tp_unclipped = float(mean[-1])
-            tp = max(tp_unclipped, current - 3.0 * atr)
-            tp = min(tp, current - 0.5 * atr)
+        # Confidence-scaled TP/SL. The legacy fixed ATR-clipped TP capped
+        # strong signals at 3×ATR even when the forecast suggested a much
+        # bigger move. The scaler maps σ → target % and derives SL from
+        # the user's R:R (defaulting to 1.5:1 at the strategy level — the
+        # runner can override per-user once we wire risk_appetite end-to-end).
+        from app.strategies.tp_scaler import compute_tp_sl
+        levels = compute_tp_sl(
+            side=side,
+            current_price=current,
+            atr=atr,
+            confidence=confidence,
+            target_rr=getattr(self, "target_rr", 1.5),
+        )
+        sl = levels.stop_loss
+        tp = levels.take_profit
 
         return StrategySignal(
             symbol=symbol,
@@ -157,6 +169,8 @@ class LatPFNQuantStrategy(Strategy):
                 "forecast_avg_std": float(np.mean(std)),
                 "n_predict": self.n_predict,
                 "strategy": "latpfn_quant",
+                "tp_pct": float(levels.tp_pct),
+                "rr": float(levels.rr),
             },
         )
 

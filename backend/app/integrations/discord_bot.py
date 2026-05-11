@@ -258,17 +258,35 @@ def _build_bot(cfg: BotConfig):
         except Exception as exc:  # noqa: BLE001
             await interaction.followup.send(f"positions failed: `{exc}`", ephemeral=True)
 
-    @tree.command(name="scan", description="Run a LaT-PFN multi-instrument scan")
+    @tree.command(name="scan", description="Run a LaT-PFN multi-instrument scan (~5-10s)")
     async def scan(interaction):
+        # Public (not ephemeral) so the result lives in the channel for
+        # team review.
         await interaction.response.defer(thinking=True, ephemeral=False)
-        # We don't ship the live multi-instrument scan inside the bot — the
-        # /tmp/latpfn_scan.py script is the canonical scan today. Surface a
-        # placeholder so the command is discoverable; wire up the real scan
-        # when the LaT-PFN client is callable from the bot's process.
-        await interaction.followup.send(
-            "Scan integration not yet wired into the bot — the LaT-PFN scan currently "
-            "runs as a script at `/tmp/latpfn_scan.py`. Wire it up next iteration.",
-        )
+        try:
+            from app.integrations.latpfn_scan import format_table, run_scan
+            rows = await run_scan(timeout_s=25.0)
+            strong = [r for r in rows if abs(r.snr) >= 1.5]
+            highlight = ""
+            if strong:
+                top = strong[0]
+                highlight = (
+                    f"\n**Top signal:** {top.label} {top.direction} "
+                    f"·  {top.drift_pct:+.2f}% over the next 12h · {top.snr:+.2f}σ\n"
+                )
+            elif rows:
+                top = rows[0]
+                highlight = (
+                    f"\n_No signal crosses the 1.5σ bar. Strongest: "
+                    f"{top.label} {top.direction} ({top.snr:+.2f}σ)._\n"
+                )
+            await interaction.followup.send(
+                f"**LaT-PFN scan** — 12h horizon, ranked by |drift/σ|.{highlight}"
+                f"{format_table(rows)}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("/scan failed: %s", exc)
+            await interaction.followup.send(f"scan failed: `{exc}`")
 
     # ----- Mutating commands --------------------------------------------
 
