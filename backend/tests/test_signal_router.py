@@ -319,3 +319,84 @@ async def test_fan_out_persists_executions_atomically(db_session, seed_bots):
     statuses = {ex.status for ex in persisted}
     assert ExecutionStatus.filled in statuses
     assert ExecutionStatus.rejected in statuses
+
+
+# -----------------------------------------------------------------------
+# Per-user instrument filter (Subscription.allowed_instruments)
+# -----------------------------------------------------------------------
+
+def _subscribe_with_filter(
+    db_session, user_id: int, bot_id: int, allowed_csv: str | None, aggression: int = 5
+):
+    """Variant of _subscribe that sets allowed_instruments on the row."""
+    sub = Subscription(
+        user_id=user_id,
+        bot_id=bot_id,
+        aggression_level=aggression,
+        is_paused=False,
+        allowed_instruments=allowed_csv,
+    )
+    db_session.add(sub)
+    db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_fan_out_skips_subscriber_outside_allowed_instruments(db_session, seed_bots):
+    """When allowed_instruments is set and the signal's instrument isn't in
+    the user's filter, the subscriber is silently skipped — no execution row.
+    A second subscriber with NULL filter (= all instruments) still gets the
+    fill, proving the filter is opt-in and doesn't break legacy rows."""
+    bot = seed_bots[0]
+    eur_only = _make_user(db_session, "eur-only@example.com")
+    all_user = _make_user(db_session, "all@example.com")
+    # eur-only opts in to EURUSD only; all_user has no filter (legacy / default).
+    _subscribe_with_filter(db_session, eur_only.id, bot.id, "EURUSD")
+    _subscribe_with_filter(db_session, all_user.id, bot.id, None)
+
+    # Fire a GBPUSD signal — eur-only must be skipped, all_user must be filled.
+    signal = _make_signal(db_session, bot.id, instrument="GBPUSD")
+    fake_state = AsyncMock(return_value={"balance": 10_000.0})
+    fake_order = AsyncMock(return_value={"orderId": "GBP-1"})
+
+    with patch(
+        "app.core.signal_router.TradeLockerClient.get_account_state", new=fake_state
+    ), patch(
+        "app.core.signal_router.TradeLockerClient.place_order", new=fake_order
+    ):
+        result = await fan_out(signal, db_session)
+
+    # Only one execution — the unfiltered subscriber.
+    assert len(result) == 1
+    assert result[0].user_id == all_user.id
+    assert result[0].status == ExecutionStatus.filled
+    # No execution row was created for the filtered-out user.
+    eur_only_rows = (
+        db_session.query(Execution)
+        .filter(Execution.user_id == eur_only.id)
+        .all()
+    )
+    assert eur_only_rows == []
+
+
+@pytest.mark.asyncio
+async def test_fan_out_includes_subscriber_inside_allowed_instruments(db_session, seed_bots):
+    """When the signal's instrument IS in the filter, the subscriber gets a
+    normal fill — the filter only narrows, never amplifies."""
+    bot = seed_bots[0]
+    user = _make_user(db_session, "eur-only-pass@example.com")
+    _subscribe_with_filter(db_session, user.id, bot.id, "EURUSD,GBPUSD")
+
+    signal = _make_signal(db_session, bot.id, instrument="eurusd")  # case-insensitive
+    fake_state = AsyncMock(return_value={"balance": 10_000.0})
+    fake_order = AsyncMock(return_value={"orderId": "EUR-1"})
+
+    with patch(
+        "app.core.signal_router.TradeLockerClient.get_account_state", new=fake_state
+    ), patch(
+        "app.core.signal_router.TradeLockerClient.place_order", new=fake_order
+    ):
+        result = await fan_out(signal, db_session)
+
+    assert len(result) == 1
+    assert result[0].user_id == user.id
+    assert result[0].status == ExecutionStatus.filled

@@ -26,8 +26,23 @@ async def fan_out(signal: Signal, db: Session) -> list[Execution]:
     )
 
     executions: list[Execution] = []
+    signal_symbol = (signal.instrument or "").strip().upper()
 
     for sub in subs:
+        # Per-user instrument filter. NULL/empty means "all instruments" (legacy
+        # behavior). A non-empty CSV narrows to the listed symbols. Skip silently
+        # — no execution row, because the user explicitly opted out of this
+        # instrument and a 'rejected' row would clutter their dashboard.
+        allowed_raw = (sub.allowed_instruments or "").strip()
+        if allowed_raw:
+            allowed = {s.strip().upper() for s in allowed_raw.split(",") if s.strip()}
+            if signal_symbol and signal_symbol not in allowed:
+                logger.debug(
+                    "skipping user=%s for signal %s: instrument not in user filter (%s)",
+                    sub.user_id, signal_symbol, sorted(allowed),
+                )
+                continue
+
         user: User | None = db.get(User, sub.user_id)
         if user is None or not user.is_active:
             continue

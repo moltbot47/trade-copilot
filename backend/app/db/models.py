@@ -151,6 +151,10 @@ class Subscription(Base):
     bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id"), index=True, nullable=False)
     aggression_level: Mapped[int] = mapped_column(Integer, default=5)  # 1-10
     is_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Per-user instrument filter (CSV; NULL = inherit all of Bot.instruments_csv).
+    # Validated against the parent bot's instruments on create/update so users
+    # can't subscribe to instruments the bot doesn't actually trade.
+    allowed_instruments: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

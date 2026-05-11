@@ -194,10 +194,24 @@ export const api = {
 
   // Subscriptions
   getSubscriptions: () => request<Subscription[]>("/api/subscriptions"),
-  subscribeToBot: (botId: number, aggression: number) =>
+  subscribeToBot: (
+    botId: number,
+    aggression: number,
+    allowedInstruments?: string[] | null,
+  ) =>
     request<Subscription>("/api/subscriptions", {
       method: "POST",
-      body: JSON.stringify({ bot_id: botId, aggression }),
+      // Backend schema is `aggression_level` + `allowed_instruments` (snake_case).
+      // We were previously sending `aggression` which the backend silently
+      // ignored — falling back to the default of 5 regardless of slider.
+      body: JSON.stringify({
+        bot_id: botId,
+        aggression_level: aggression,
+        allowed_instruments:
+          allowedInstruments && allowedInstruments.length > 0
+            ? allowedInstruments
+            : null,
+      }),
     }),
   updateSubscription: (
     subId: number,

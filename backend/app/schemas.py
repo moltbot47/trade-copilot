@@ -44,20 +44,29 @@ class BotOut(BaseModel):
 class SubscriptionCreate(BaseModel):
     bot_id: int
     aggression_level: int = Field(default=5, ge=1, le=10)
+    # Optional subset of the bot's instruments. None or empty list = subscribe
+    # to all instruments the bot trades (legacy / default behavior).
+    allowed_instruments: Optional[list[str]] = None
 
 
 class SubscriptionUpdate(BaseModel):
     aggression_level: Optional[int] = Field(default=None, ge=1, le=10)
     is_paused: Optional[bool] = None
+    # Setting to None leaves the existing filter unchanged. Pass an empty list
+    # to reset to "all instruments." Pass a non-empty list to narrow.
+    allowed_instruments: Optional[list[str]] = None
 
 
 class SubscriptionOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    # NOTE: not from_attributes — the API endpoint builds this dict explicitly
+    # because the ORM stores allowed_instruments as CSV and we expose it as
+    # list[str] | None on the wire.
     id: int
     user_id: int
     bot_id: int
     aggression_level: int
     is_paused: bool
+    allowed_instruments: Optional[list[str]] = None
     created_at: datetime
     updated_at: datetime
 

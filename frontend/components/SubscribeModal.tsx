@@ -17,12 +17,43 @@ function aggressionMultiplier(level: number): number {
   return 1.0 + (a - 5) * (1.0 / 5);
 }
 
+// Parse Bot.instruments_csv → list of canonical symbols (uppercased, deduped,
+// in declared order). Used to render the per-bot instrument checkboxes.
+function botInstruments(bot: Bot): string[] {
+  const raw = bot.instruments_csv ?? "";
+  const seen: string[] = [];
+  for (const token of raw.split(",")) {
+    const sym = token.trim().toUpperCase();
+    if (sym && !seen.includes(sym)) seen.push(sym);
+  }
+  return seen;
+}
+
 export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
   const [aggression, setAggression] = useState(5);
   const [balance, setBalance] = useState<number | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Per-user instrument filter. Default: all of the bot's instruments selected
+  // (= same behavior as before this feature shipped). Deselecting some
+  // narrows the user to a subset; deselecting all is blocked by the submit
+  // button's disabled state below.
+  const instruments = botInstruments(bot);
+  const [selectedInstruments, setSelectedInstruments] = useState<Set<string>>(
+    () => new Set(instruments),
+  );
+  const toggleInstrument = (sym: string) => {
+    setSelectedInstruments((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) next.delete(sym);
+      else next.add(sym);
+      return next;
+    });
+  };
+  const allSelected = instruments.length > 0 && selectedInstruments.size === instruments.length;
+  const noneSelected = selectedInstruments.size === 0;
 
   useEffect(() => {
     (async () => {
@@ -62,7 +93,11 @@ export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
     setErr(null);
     setBusy(true);
     try {
-      await api.subscribeToBot(bot.id, aggression);
+      // If the user kept every instrument selected, send null — that maps to
+      // "all instruments" in the backend and avoids a stale snapshot if the
+      // bot's instrument list is expanded later.
+      const instrumentsPayload = allSelected ? null : Array.from(selectedInstruments);
+      await api.subscribeToBot(bot.id, aggression, instrumentsPayload);
       onSuccess();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -157,6 +192,85 @@ export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
         <p style={{ fontSize: "0.92rem", marginTop: 0 }}>
           {bot.description}
         </p>
+
+        {/* Per-user instrument filter — all checked by default = legacy behavior. */}
+        {instruments.length > 0 && (
+          <div style={{ margin: "1rem 0" }} aria-labelledby="instruments-label">
+            <div
+              id="instruments-label"
+              style={{
+                fontSize: "0.88rem",
+                marginBottom: "0.45rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
+              }}
+            >
+              <span className="dim">Instruments to trade:</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedInstruments(
+                    allSelected ? new Set() : new Set(instruments),
+                  )
+                }
+                className="dim"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "0.72rem",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                {allSelected ? "deselect all" : "select all"}
+              </button>
+            </div>
+            <div
+              role="group"
+              aria-label="bot instruments"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.4rem 0.75rem",
+                fontSize: "0.85rem",
+              }}
+            >
+              {instruments.map((sym) => {
+                const checked = selectedInstruments.has(sym);
+                return (
+                  <label
+                    key={sym}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleInstrument(sym)}
+                      aria-label={sym}
+                    />
+                    <span className={checked ? "accent" : "dim"}>{sym}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {noneSelected && (
+              <p
+                className="danger"
+                style={{ fontSize: "0.78rem", marginTop: "0.4rem", marginBottom: 0 }}
+              >
+                Pick at least one instrument to subscribe.
+              </p>
+            )}
+          </div>
+        )}
 
         <div style={{ margin: "1rem 0" }}>
           <label
@@ -256,11 +370,17 @@ export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
           </button>
           <button
             onClick={submit}
-            disabled={busy || blocked}
+            disabled={busy || blocked || noneSelected}
             className="btn btn-primary"
             style={{ padding: "0.6rem 1.2rem", fontWeight: 700 }}
           >
-            {busy ? "subscribing…" : blocked ? "connect broker first" : "Confirm subscribe"}
+            {busy
+              ? "subscribing…"
+              : blocked
+                ? "connect broker first"
+                : noneSelected
+                  ? "pick instruments"
+                  : "Confirm subscribe"}
           </button>
         </div>
       </div>
