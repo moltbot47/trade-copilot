@@ -25,12 +25,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
 from app.core.crypto import decrypt
 from app.db.database import SessionLocal
-from app.db.models import Cohort, CohortLeg, CohortStatus, User
+from app.db.models import Cohort, CohortStatus, User
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func
 
 from app.db.database import SessionLocal
 from app.db.models import TradeOutcome

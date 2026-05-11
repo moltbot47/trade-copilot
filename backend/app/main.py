@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -208,9 +207,6 @@ def _apply_lightweight_migrations() -> None:
             )
             r1 = conn.execute(sql_clean_btc, {"sym": "BTCUSD"})
             r2 = conn.execute(sql_clean_eth, {"sym": "ETHUSD"})
-            sql_clean_cohorts = text(
-                "DELETE FROM cohort_legs WHERE entry_price < 100 AND instrument IN (SELECT instrument FROM cohorts WHERE id = cohort_id)"
-            )
             sql_clean_cohort_rows = text(
                 "DELETE FROM cohorts WHERE (instrument = 'BTCUSD' AND weighted_avg_entry < 1000) OR (instrument = 'ETHUSD' AND weighted_avg_entry < 100)"
             )

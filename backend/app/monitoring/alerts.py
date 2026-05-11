@@ -17,7 +17,6 @@ outage produces ONE alert + a recovery message, not a flood.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -69,7 +68,10 @@ class HealthAlerter:
             return None
 
         now = time.monotonic()
-        if now - state.last_alert_ts < ALERT_COOLDOWN_SECONDS:
+        # Cooldown only applies once we've alerted at least once on this stream.
+        # last_alert_ts == 0.0 means "never alerted" — don't gate the first alert
+        # on monotonic time (which can be < ALERT_COOLDOWN_SECONDS at process start).
+        if state.last_alert_ts > 0 and (now - state.last_alert_ts) < ALERT_COOLDOWN_SECONDS:
             return None  # already alerted recently
         state.last_alert_ts = now
         return f"🚨 ALERT: `{stream}` streak at {state.count} consecutive failures"

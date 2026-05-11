@@ -125,17 +125,17 @@ def _favorable_r(cohort: Cohort, price: float) -> float:
 
 def weighted_average_entry(legs: list[CohortLeg]) -> float:
     """Volume-weighted average entry across open legs (excludes hedge_close legs)."""
-    open_legs = [l for l in legs if l.is_open and l.role in ("entry", "scale_in")]
-    total_qty = sum(l.qty for l in open_legs)
+    open_legs = [leg for leg in legs if leg.is_open and leg.role in ("entry", "scale_in")]
+    total_qty = sum(leg.qty for leg in open_legs)
     if total_qty <= 1e-12:
         return 0.0
-    weighted = sum(l.entry_price * l.qty for l in open_legs)
+    weighted = sum(leg.entry_price * leg.qty for leg in open_legs)
     return weighted / total_qty
 
 
 def open_qty(legs: list[CohortLeg]) -> float:
     """Total long/short qty across open entry+scale_in legs."""
-    return sum(l.qty for l in legs if l.is_open and l.role in ("entry", "scale_in"))
+    return sum(leg.qty for leg in legs if leg.is_open and leg.role in ("entry", "scale_in"))
 
 
 class TradeManager:
@@ -302,7 +302,6 @@ class TradeManager:
         return leg
 
     def update_stop(self, cohort: Cohort, new_stop: float, reason: str = "trail_stop") -> None:
-        prev_stop = cohort.current_stop
         cohort.current_stop = float(new_stop)
         moved_legs: list[tuple[Optional[str], Optional[float]]] = []
         for leg in cohort.legs:
@@ -574,7 +573,7 @@ class TradeManager:
             )
 
         # 4. Scale-in (favorable +0.5R, leg cap not reached, forecast still on)
-        active_legs = [l for l in cohort.legs if l.is_open and l.role in ("entry", "scale_in")]
+        active_legs = [leg for leg in cohort.legs if leg.is_open and leg.role in ("entry", "scale_in")]
         if (
             cohort.status == CohortStatus.open
             and len(active_legs) < SCALE_IN_MAX_LEGS

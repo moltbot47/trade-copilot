@@ -60,7 +60,9 @@ def verify_code(secret: str, code: str) -> bool:
 
 def encrypt_secret(plain_secret: str) -> str:
     """Encrypt the base32 secret for DB storage."""
-    return encrypt(plain_secret)
+    result = encrypt(plain_secret)
+    assert result is not None  # plain_secret is non-None, so encrypt returns str
+    return result
 
 
 def decrypt_secret(stored: Optional[str]) -> Optional[str]:

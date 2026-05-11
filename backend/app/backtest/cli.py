@@ -109,19 +109,21 @@ def _build_strategy(bot_slug: str, symbol: str, base_qty: float):
     the harness doesn't require a running model server. Override via
     --drift / --sigma flags for deterministic scenarios.
     """
+    # _NullForecastClient is a structural stand-in for LaTPFNClient in the
+    # backtest harness — same forecast() shape, no model server required.
     client = _NullForecastClient(drift_atr=0.5, sigma_atr=0.1)
     if bot_slug == "latpfn-quant":
         return LatPFNQuantStrategy(
             bot_id=0,
             timeframe="1m",
-            latpfn_client=client,
+            latpfn_client=client,  # type: ignore[arg-type]
             base_qty=base_qty,
         )
     if bot_slug == "latpfn-momentum":
         return LatPFNMomentumStrategy(
             bot_id=0,
             timeframe="1m",
-            latpfn_client=client,
+            latpfn_client=client,  # type: ignore[arg-type]
             base_qty=base_qty,
         )
     raise SystemExit(

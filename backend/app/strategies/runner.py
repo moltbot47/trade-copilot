@@ -33,7 +33,7 @@ from app.db.models import (
 )
 from app.strategies.base import StrategySignal
 from app.strategies.data_feed import BarFetcher
-from app.strategies.exhaustion_filter import passes_exhaustion, passes_no_chase
+from app.strategies.exhaustion_filter import passes_no_chase
 from app.strategies.feedback import FeedbackAdjuster
 from app.strategies.latpfn_client import LaTPFNClient
 from app.strategies.momentum import LatPFNMomentumStrategy
@@ -1478,7 +1478,7 @@ class QuantRunner:
             # key (rare in practice, but the math should be sound).
             import time as _time
             _scale_bucket = int(_time.time() // 60)
-            _leg_count = len([l for l in cohort.legs if l.is_open])
+            _leg_count = len([leg for leg in cohort.legs if leg.is_open])
             scale_coid = f"tc-scalein-{cohort.id}-{_leg_count}-{_scale_bucket}"
             order = await client.place_order(
                 account_id=account_id,
@@ -1529,11 +1529,11 @@ class QuantRunner:
             # lookup race). Falling back to any open leg with a position ID.
             close_leg = next(
                 (
-                    l
-                    for l in cohort.legs
-                    if l.is_open
-                    and l.role in ("entry", "scale_in")
-                    and l.tradelocker_position_id
+                    leg
+                    for leg in cohort.legs
+                    if leg.is_open
+                    and leg.role in ("entry", "scale_in")
+                    and leg.tradelocker_position_id
                 ),
                 None,
             )

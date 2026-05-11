@@ -10,10 +10,12 @@ is removed entirely.
 """
 from __future__ import annotations
 
+import re
 import secrets
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -112,9 +114,6 @@ def read_me(user: User = Depends(get_current_user)) -> UserOut:
 
 
 # ----- Per-user notification webhook (Discord) -----
-
-from pydantic import BaseModel, AnyUrl
-import re
 
 _DISCORD_WEBHOOK_PATTERN = re.compile(
     r"^https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_\-]+$"
