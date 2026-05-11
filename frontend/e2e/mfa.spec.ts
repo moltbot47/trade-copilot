@@ -19,7 +19,7 @@
  * intended contract is checked into git — the next dev to wire up MFA
  * will see exactly what to assert.
  */
-import { test, expect, MOCK_MFA_SETUP, seedLoggedIn } from "./fixtures";
+import { test, expect, API_ORIGIN, MOCK_MFA_SETUP, seedLoggedIn } from "./fixtures";
 
 test.describe("MFA setup flow", () => {
   test.beforeEach(async ({ page, mockApi }) => {
@@ -65,26 +65,29 @@ test.describe("MFA setup flow", () => {
     page,
   }) => {
     // Drive a fetch directly from the page context (no real backend).
+    // We fetch the absolute API origin because the page.route() matcher in
+    // fixtures.ts intercepts ${API_ORIGIN}/api/* — a relative `/api/*` fetch
+    // would hit the Next.js dev server and return HTML (404), not JSON.
     await page.goto("/");
 
-    const setup = await page.evaluate(async () => {
-      const r = await fetch("/api/auth/mfa/setup", { method: "POST" });
+    const setup = await page.evaluate(async (origin) => {
+      const r = await fetch(`${origin}/api/auth/mfa/setup`, { method: "POST" });
       return { status: r.status, body: await r.json() };
-    });
+    }, API_ORIGIN);
     expect(setup.status).toBe(200);
     expect(setup.body).toMatchObject({
       secret: MOCK_MFA_SETUP.secret,
     });
     expect(setup.body.qr_code).toMatch(/^data:image\/svg\+xml/);
 
-    const verify = await page.evaluate(async () => {
-      const r = await fetch("/api/auth/mfa/verify", {
+    const verify = await page.evaluate(async (origin) => {
+      const r = await fetch(`${origin}/api/auth/mfa/verify`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: "000000" }),
       });
       return { status: r.status, body: await r.json() };
-    });
+    }, API_ORIGIN);
     expect(verify.status).toBe(400);
     expect(verify.body.detail).toMatch(/invalid code/i);
   });

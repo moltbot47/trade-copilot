@@ -24,14 +24,27 @@ test.describe("Bots marketplace", () => {
     }
   });
 
-  test("clicking Subscribe redirects to /strategy?bot=<slug>", async ({
+  test("clicking Subscribe opens modal, confirm redirects to /strategy?bot=<slug>", async ({
     page,
     mockApi,
   }) => {
-    // Seed an authenticated session so Subscribe calls the API path,
-    // not the "redirect to /strategy and prompt EmailGate" fallback.
+    // Seed an authenticated session so Subscribe opens the modal instead
+    // of routing through EmailGate. Also override the tradelocker account
+    // mock to `connected: true` so the modal's Confirm button is enabled
+    // (otherwise it shows "connect broker first" and blocks submit).
     await seedLoggedIn(page, "test@example.com");
-    await mockApi();
+    await mockApi({
+      "GET /api/tradelocker/account": async (route) =>
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            balance: 50000,
+            equity: 50000,
+            open_pnl: 0,
+            connected: true,
+          }),
+        }),
+    });
 
     await page.goto("/bots");
 
@@ -43,7 +56,16 @@ test.describe("Bots marketplace", () => {
 
     await card.getByRole("button", { name: /^subscribe/i }).click();
 
-    // BotCard sets window.location.href — wait for the strategy URL.
+    // Subscribe is a modal-trigger button now (not a navigating link).
+    // The modal renders an h2 "Subscribe to <bot.name>".
+    const modalHeading = page.getByRole("heading", {
+      level: 2,
+      name: new RegExp(`Subscribe to ${target.name}`, "i"),
+    });
+    await expect(modalHeading).toBeVisible();
+
+    // Confirm subscribe → POST /api/subscriptions → onSuccess() → window.location to /strategy
+    await page.getByRole("button", { name: /^confirm subscribe/i }).click();
     await page.waitForURL(`**/strategy?bot=${target.slug}`);
 
     // Strategy page should resolve the bot from the URL param and render

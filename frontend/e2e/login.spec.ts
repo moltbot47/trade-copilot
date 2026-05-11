@@ -39,16 +39,32 @@ test.describe("Login flow", () => {
     expect(stored).toBe("test@example.com");
   });
 
-  test("invalid email is rejected client-side", async ({ page, mockApi }) => {
-    await mockApi();
+  test("backend rejection surfaces an alert message in the gate", async ({
+    page,
+    mockApi,
+  }) => {
+    // The original "invalid email is rejected client-side" test asserted a
+    // JS-side validator, but the <input type="email" required> field means
+    // HTML5 native validation catches malformed input before submit() fires.
+    // The realistic failure path users actually hit is a 4xx from the backend
+    // (rate-limited, locked, etc.) — verify that path renders the alert.
+    await mockApi({
+      "POST /api/auth/login": async (route) =>
+        route.fulfill({
+          status: 429,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ detail: "Too many login attempts. Try again in a minute." }),
+        }),
+    });
     await page.goto("/dashboard");
 
     const dialog = page.getByRole("dialog", { name: /identify yourself/i });
     await expect(dialog).toBeVisible();
 
-    await dialog.getByLabel("Email").fill("not-an-email");
+    await dialog.getByLabel("Email").fill("blocked@example.com");
     await dialog.getByRole("button", { name: /continue/i }).click();
 
-    await expect(dialog.getByRole("alert")).toContainText(/valid email/i);
+    // friendlyError() renders the backend `detail` field into the role=alert <p>.
+    await expect(dialog.getByRole("alert")).toContainText(/too many login attempts/i);
   });
 });
