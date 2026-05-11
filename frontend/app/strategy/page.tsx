@@ -242,6 +242,28 @@ export default function StrategyPage() {
 
   const [commandInFlight, setCommandInFlight] = useState(false);
 
+  // On-demand "what does the model say right now?" analysis. Doesn't
+  // start the runner — gives the user a live confidence + suggested
+  // entry/SL/TP per instrument so they can decide whether to press START.
+  type AnalyzeRow = Awaited<ReturnType<typeof api.analyzeStrategy>>["items"][number];
+  type AnalyzeResult = Awaited<ReturnType<typeof api.analyzeStrategy>>;
+  const [analysis, setAnalysis] = useState<AnalyzeResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setAnalyzeErr(null);
+    try {
+      const data = await api.analyzeStrategy(botId, timeframe);
+      setAnalysis(data);
+    } catch (err) {
+      setAnalyzeErr((err as Error).message || "analyze failed");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const handleStart = async () => {
     const email = getUserEmail();
     const userEmails = email ? [email] : [];
@@ -378,6 +400,21 @@ export default function StrategyPage() {
 
           <StrategyStatusBadge state={state} />
 
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={offline || analyzing}
+            className="btn"
+            title="Run a one-shot LaT-PFN analysis without starting the runner"
+            style={{
+              padding: "0.4rem 0.85rem",
+              fontSize: "0.82rem",
+              cursor: analyzing ? "wait" : "pointer",
+            }}
+          >
+            {analyzing ? "thinking…" : "run analysis now"}
+          </button>
+
           <StrategyControlButton
             isRunning={!!state?.is_running}
             onStart={handleStart}
@@ -386,6 +423,171 @@ export default function StrategyPage() {
           />
         </div>
       </header>
+
+      {/* On-demand analysis result */}
+      {(analyzing || analysis || analyzeErr) && (
+        <section
+          className="card"
+          aria-labelledby="analyze-heading"
+          style={{ borderColor: "var(--accent-dim)" }}
+        >
+          <header
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: "0.5rem",
+              gap: "0.5rem",
+            }}
+          >
+            <h2 id="analyze-heading" style={{ margin: 0 }} className="accent">
+              {">"} live model view
+            </h2>
+            <span className="dim" style={{ fontSize: "0.78rem" }}>
+              {analyzing
+                ? "calling LaT-PFN…"
+                : analysis
+                  ? `${analysis.items.length} pairs · ${analysis.elapsed_ms}ms · threshold ${analysis.threshold.toFixed(2)}σ · R:R ${analysis.target_rr.toFixed(1)}:1 · appetite ${analysis.risk_appetite}`
+                  : "—"}
+            </span>
+          </header>
+
+          {analyzeErr && (
+            <p className="danger" style={{ fontSize: "0.85rem" }}>
+              {analyzeErr}
+            </p>
+          )}
+
+          {analyzing && !analysis && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                padding: "0.5rem 0",
+                fontSize: "0.88rem",
+              }}
+              className="dim"
+            >
+              <span className="accent" style={{ fontWeight: 700 }}>
+                ●
+              </span>
+              pulling 240 bars + running LaT-PFN forecast per pair…
+            </div>
+          )}
+
+          {analysis && analysis.items.length > 0 && (
+            <div
+              style={{
+                fontFamily: "monospace",
+                fontSize: "0.82rem",
+                overflowX: "auto",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "minmax(80px,90px) 60px minmax(70px,90px) minmax(80px,1fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px",
+                  gap: "0.5rem 0.8rem",
+                  padding: "0.35rem 0.5rem",
+                  borderBottom: "1px solid var(--accent-dim)",
+                }}
+                className="dim"
+              >
+                <span>SYMBOL</span>
+                <span>SIDE</span>
+                <span>CONF (σ)</span>
+                <span>ENTRY</span>
+                <span>STOP LOSS</span>
+                <span>TAKE PROFIT</span>
+                <span>TP %</span>
+                <span>R:R</span>
+              </div>
+              {analysis.items.map((row: AnalyzeRow) => (
+                <div
+                  key={row.symbol}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "minmax(80px,90px) 60px minmax(70px,90px) minmax(80px,1fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px",
+                    gap: "0.5rem 0.8rem",
+                    padding: "0.4rem 0.5rem",
+                    borderBottom: "1px solid rgba(0, 200, 83, 0.08)",
+                    background: row.fits_threshold
+                      ? "rgba(0, 200, 83, 0.04)"
+                      : "transparent",
+                  }}
+                >
+                  <span className="accent" style={{ fontWeight: 700 }}>
+                    {row.symbol}
+                  </span>
+                  {row.error ? (
+                    <span
+                      style={{
+                        gridColumn: "2 / span 7",
+                        color: "var(--warn)",
+                      }}
+                    >
+                      error: {row.error}
+                    </span>
+                  ) : (
+                    <>
+                      <span
+                        style={{
+                          color:
+                            row.direction === "buy"
+                              ? "var(--accent)"
+                              : "var(--danger)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {(row.direction || "—").toUpperCase()}
+                      </span>
+                      <span
+                        style={{
+                          color: row.fits_threshold
+                            ? "var(--accent)"
+                            : "var(--dim)",
+                          fontWeight: row.fits_threshold ? 700 : 400,
+                        }}
+                      >
+                        {row.confidence?.toFixed(2)}σ
+                        {row.fits_threshold ? " ✓" : ""}
+                      </span>
+                      <span>{row.entry?.toFixed(4)}</span>
+                      <span style={{ color: "var(--danger)" }}>
+                        {row.stop_loss?.toFixed(4)}
+                      </span>
+                      <span style={{ color: "var(--accent)" }}>
+                        {row.take_profit?.toFixed(4)}
+                      </span>
+                      <span className="dim">
+                        {row.tp_pct?.toFixed(2)}%
+                      </span>
+                      <span className="dim">{row.rr?.toFixed(2)}</span>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {analysis && (
+            <p
+              className="dim"
+              style={{ fontSize: "0.75rem", marginTop: "0.5rem", marginBottom: 0 }}
+            >
+              Read-only · no orders placed · same math the bot runs every tick
+              ·{" "}
+              <span className="accent" style={{ fontWeight: 700 }}>
+                ✓
+              </span>{" "}
+              rows beat the threshold and would fire if you press START.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Backend offline banner */}
       {offline && (

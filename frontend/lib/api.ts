@@ -324,6 +324,38 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ bot_id: botId, timeframe: tf }),
     }),
+  // One-shot LaT-PFN analysis across the bot's instruments. No trades,
+  // no DB write, no runner spawn — purely read-only "what would you do
+  // right now?" data so the user can sanity-check before pressing START.
+  analyzeStrategy: (botId: number, tf: StrategyTimeframe) =>
+    request<{
+      bot_id: number;
+      bot_name: string;
+      timeframe: StrategyTimeframe;
+      threshold: number;
+      target_rr: number;
+      risk_appetite: string;
+      user_email: string;
+      elapsed_ms: number;
+      items: Array<{
+        symbol: string;
+        confidence?: number;
+        drift_atr?: number;
+        direction?: "buy" | "sell";
+        entry?: number;
+        stop_loss?: number;
+        take_profit?: number;
+        tp_pct?: number;
+        rr?: number;
+        fits_threshold?: boolean;
+        atr?: number;
+        elapsed_ms?: number;
+        error?: string;
+      }>;
+    }>("/api/strategy/analyze", {
+      method: "POST",
+      body: JSON.stringify({ bot_id: botId, timeframe: tf }),
+    }),
 
   // Settings — per-user Discord webhook
   getDiscordWebhook: () =>

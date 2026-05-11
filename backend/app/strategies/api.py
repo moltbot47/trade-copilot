@@ -310,3 +310,173 @@ def analysis(
         "items": items,
         "next_before_id": items[-1]["id"] if items else None,
     }
+
+
+# ---------------------------------------------------------------------
+# On-demand analysis — "what would the bot decide if it ticked NOW"
+# ---------------------------------------------------------------------
+
+class AnalyzeReq(BaseModel):
+    bot_id: int
+    timeframe: str = "1m"
+
+
+@router.post("/analyze")
+async def analyze_now(req: AnalyzeReq, db: Session = Depends(get_db)) -> dict:
+    """Run a one-shot LaT-PFN analysis over the bot's instruments.
+
+    Does NOT place trades, does NOT spawn a runner, does NOT write to DB.
+    It's the same forecast call the runner does every 60s, exposed as a
+    button so users can sanity-check before pressing START or see a fresh
+    score on demand.
+
+    Returns: per-instrument {symbol, confidence, drift, direction, entry,
+    stop_loss, take_profit, tp_pct, rr, fits_threshold}. Symbols where the
+    forecast fails (broker error, low-data, etc.) are still returned with
+    error=<reason>.
+    """
+    import asyncio
+    import os
+    import time
+
+    from app.api.users import get_or_create_user as _gocu  # noqa: F401 (re-export check)
+    from app.core.crypto import decrypt
+    from app.core.tradelocker_client import TradeLockerClient
+    from app.db.models import StrategyState, User
+    from app.strategies.data_feed import BarFetcher
+    from app.strategies.latpfn_client import LaTPFNClient
+    from app.strategies.momentum import compute_atr
+    from app.strategies.tp_scaler import compute_tp_sl
+
+    bot = db.get(Bot, req.bot_id)
+    if bot is None or not getattr(bot, "is_active", True):
+        raise HTTPException(404, "bot not found or inactive")
+
+    # Only LaT-PFN strategies have a confidence concept. Pine bots are
+    # event-driven (webhook) and there's no "current view" to sample.
+    if bot.strategy_type not in (StrategyType.latpfn_momentum, StrategyType.latpfn_quant):
+        raise HTTPException(
+            400,
+            f"on-demand analysis only supported for LaT-PFN bots; "
+            f"got {bot.strategy_type.value}",
+        )
+
+    # Resolve the calling user via the strategy-state config or default to
+    # the first connected user. The existing /start route relies on the
+    # caller passing user_emails; here we just analyze for whichever user
+    # has a TradeLocker session that can fetch bars.
+    user = (
+        db.query(User)
+        .filter(User.tradelocker_token.isnot(None), User.tradelocker_account_id.isnot(None))
+        .first()
+    )
+    if user is None:
+        raise HTTPException(400, "no user with a connected TradeLocker session")
+
+    token = decrypt(user.tradelocker_token)
+    if not token:
+        raise HTTPException(400, "broker token unreadable")
+
+    # Threshold defaults to the user's risk_appetite preset; the runner
+    # uses the same mapping. Conservative=1.5σ, balanced=0.8σ, aggressive=0.3σ.
+    appetite_threshold = {"conservative": 1.5, "balanced": 0.8, "aggressive": 0.3}
+    threshold = appetite_threshold.get(user.risk_appetite or "balanced", 0.8)
+    target_rr = {"conservative": 2.0, "balanced": 1.5, "aggressive": 1.0}.get(
+        user.risk_appetite or "balanced", 1.5
+    )
+
+    state = (
+        db.query(StrategyState)
+        .filter(StrategyState.bot_id == req.bot_id, StrategyState.timeframe == req.timeframe)
+        .first()
+    )
+    if state and state.confidence_threshold:
+        # Per-bot override beats the appetite default.
+        threshold = float(state.confidence_threshold)
+
+    # Parse the bot's instrument set.
+    symbols = [s.strip().upper() for s in (bot.instruments_csv or "").split(",") if s.strip()]
+    if not symbols:
+        raise HTTPException(400, "bot has no instruments configured")
+
+    # Build broker + forecast clients fresh — these don't share state with
+    # the live runner so the on-demand call doesn't affect open positions.
+    tl_client = TradeLockerClient(env=user.tradelocker_env or "demo")
+    # account_id is non-None here by the filter above; assert narrows for mypy.
+    assert user.tradelocker_account_id is not None
+    bars_fetcher = BarFetcher(
+        client=tl_client,
+        account_id=user.tradelocker_account_id,
+        token=token,
+        acc_num=user.tradelocker_acc_num or "1",
+    )
+    latpfn = LaTPFNClient(endpoint_url=os.getenv("LATPFN_ENDPOINT_URL") or None)
+
+    async def _one_symbol(symbol: str) -> dict:
+        t0 = time.monotonic()
+        try:
+            bars = await bars_fetcher.fetch_bars(symbol, timeframe=req.timeframe, count=240)
+            if bars is None or len(bars) < 30:
+                return {"symbol": symbol, "error": "not enough bars"}
+
+            atr = await asyncio.to_thread(compute_atr, bars, 14)
+            if not atr or atr <= 0:
+                return {"symbol": symbol, "error": "ATR computation failed"}
+
+            f = await latpfn.forecast(bars, n_predict=12)
+            mean_endpoint = float(f["mean"][-1])
+            current = float(f["current_price"])
+            mean_drift = (mean_endpoint - current) / atr
+            sigma_atr = sum(f["std"]) / max(len(f["std"]), 1) / atr
+            sigma_atr = max(sigma_atr, 1e-6)
+            confidence = abs(mean_drift) / sigma_atr
+            direction = "buy" if mean_drift > 0 else "sell"
+            fits_threshold = confidence >= threshold
+
+            levels = compute_tp_sl(
+                side=direction,
+                current_price=current,
+                atr=atr,
+                confidence=confidence,
+                target_rr=target_rr,
+            )
+
+            return {
+                "symbol": symbol,
+                "confidence": round(confidence, 3),
+                "drift_atr": round(mean_drift, 3),
+                "direction": direction,
+                "entry": levels.entry,
+                "stop_loss": levels.stop_loss,
+                "take_profit": levels.take_profit,
+                "tp_pct": round(levels.tp_pct, 2),
+                "rr": round(levels.rr, 2),
+                "fits_threshold": fits_threshold,
+                "atr": round(atr, 6),
+                "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            }
+        except Exception as exc:  # noqa: BLE001 — analysis must never crash
+            logger.warning("analyze_now %s failed: %s", symbol, exc)
+            return {
+                "symbol": symbol,
+                "error": str(exc)[:240],
+                "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            }
+
+    # Run all symbols concurrently — they share httpx clients but each
+    # call is independent.
+    started = time.monotonic()
+    items = await asyncio.gather(*[_one_symbol(s) for s in symbols])
+    total_ms = int((time.monotonic() - started) * 1000)
+
+    return {
+        "bot_id": req.bot_id,
+        "bot_name": bot.name,
+        "timeframe": req.timeframe,
+        "threshold": threshold,
+        "target_rr": target_rr,
+        "risk_appetite": user.risk_appetite or "balanced",
+        "user_email": user.email,
+        "items": items,
+        "elapsed_ms": total_ms,
+    }
