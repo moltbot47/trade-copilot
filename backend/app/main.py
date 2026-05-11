@@ -446,9 +446,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 app.add_middleware(SlowAPIMiddleware)
 
 # --- CORS (allow_credentials=True is required for cookie-based session) ---
+# We allow the canonical apex (production) AND any *.jetlag-recovery.com
+# subdomain (www, staging, future) via regex. Without the regex, a user
+# arriving at https://www.trading.jetlag-recovery.com or a Vercel preview
+# would silently fail the preflight and the frontend would display the
+# generic "server unavailable" error.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*jetlag-recovery\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
