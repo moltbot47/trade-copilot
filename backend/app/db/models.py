@@ -67,6 +67,14 @@ class User(Base):
     max_daily_loss_pct: Mapped[float] = mapped_column(Float, default=3.0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # User-declared risk appetite. Drives the tiny-account advisor's
+    # recommended instrument list, threshold, and R:R target. Doesn't
+    # *enforce* anything by itself — the user can still override which
+    # pairs they subscribe to. Conservative is the safest preset; aggressive
+    # loosens the entry threshold to capture more small-edge signals for
+    # high-frequency compounding on tiny accounts.
+    risk_appetite: Mapped[str] = mapped_column(String(16), default="balanced")
+
     # Tiny-account live guardrails. When tradelocker_env == "live" the runner
     # consults these to pre-empt over-leveraging.
     #   max_lot_override: hard cap on lot size (None = no override, use risk model)

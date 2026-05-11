@@ -9,6 +9,7 @@ import type {
   StrategyStatusResponse,
   StrategyEquityResponse,
   StrategyState,
+  AdvisorResponse,
 } from "./types";
 
 const BASE_URL =
@@ -191,6 +192,10 @@ export const api = {
     }),
   getAccountState: () =>
     request<AccountState>("/api/tradelocker/account"),
+  getAdvisor: (riskAppetite?: "conservative" | "balanced" | "aggressive") =>
+    request<AdvisorResponse>(
+      `/api/tradelocker/advisor${riskAppetite ? `?risk_appetite=${riskAppetite}` : ""}`,
+    ),
 
   // Subscriptions
   getSubscriptions: () => request<Subscription[]>("/api/subscriptions"),

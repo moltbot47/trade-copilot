@@ -44,6 +44,39 @@ export type AccountState = {
   connected?: boolean;
 };
 
+export type RiskAppetite = "conservative" | "balanced" | "aggressive";
+
+export type AdvisorPreset = {
+  label: string;
+  description: string;
+  confidence_threshold: number;
+  target_rr: number;
+  max_margin_pct_per_pair: number;
+  recommended_bots: string[];
+};
+
+export type AdvisorSuggestion = {
+  symbol: string;
+  init_margin_usd: number;
+  max_lot_fit: number;
+  margin_pct_of_balance: number;
+  fits: boolean;
+  warn: boolean;
+  typical_daily_pct: number;
+  note: string;
+  broker_confirms_at_order_time: boolean;
+};
+
+export type AdvisorResponse = {
+  connected: boolean;
+  balance_usd: number;
+  risk_appetite: RiskAppetite;
+  preset: AdvisorPreset;
+  concurrent_positions_at_min_lot: number;
+  suggestions: AdvisorSuggestion[];
+  skipped: string[];
+};
+
 export type Signal = {
   id: number;
   time: string;

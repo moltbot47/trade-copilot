@@ -134,6 +134,10 @@ def _apply_lightweight_migrations() -> None:
         # instruments). Mirrored as Alembic 0002, but live DBs that were
         # stamped before that migration existed will pick it up here.
         ("subscriptions", "allowed_instruments", "VARCHAR(512) DEFAULT NULL"),
+        # Risk appetite — drives the tiny-account advisor. Mirrored as
+        # Alembic 0003. NOT NULL with default for new rows; lightweight
+        # ALTER applies NOT NULL via the DEFAULT clause on SQLite.
+        ("users", "risk_appetite", "VARCHAR(16) DEFAULT 'balanced'"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.

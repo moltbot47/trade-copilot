@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError, getUserEmail } from "@/lib/api";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import EmailGate from "@/components/EmailGate";
+import TinyAccountAdvisor from "@/components/TinyAccountAdvisor";
 import type { ConnectResponse, AccountState } from "@/lib/types";
 import type { AccountEvent } from "@/lib/ws-types";
 
@@ -341,6 +342,13 @@ export default function ConnectPage() {
             </div>
           )}
         </form>
+
+        {/* Render the advisor once we have a live broker session — either we
+            just connected successfully, or the user is revisiting /connect
+            with an already-linked account (account?.connected). */}
+        {(result?.success || result?.status === "connected" || account?.connected) && (
+          <TinyAccountAdvisor />
+        )}
 
         <div className="card">
           <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>

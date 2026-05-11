@@ -178,3 +178,107 @@ async def account_state(user: User = Depends(get_current_user)) -> TradeLockerAc
         positions_count=int(state.get("positionsCount") or 0),
         currency="USD",
     )
+
+
+# ---------------------------------------------------------------------
+# Tiny-account advisor
+# ---------------------------------------------------------------------
+
+@router.get("/advisor")
+async def advisor(
+    user: User = Depends(get_current_user),
+    risk_appetite: str | None = None,
+) -> dict:
+    """Recommend instruments + strategy presets that fit the user's balance.
+
+    Reads the user's live broker balance + the broker's instrument list,
+    then maps them through ``tiny_account_advisor`` for the user's
+    declared risk appetite (or the override passed as ``risk_appetite``).
+
+    Tiny accounts ($5–$50) are the explicit target: the response tells
+    the user which pairs they can actually open, how many they could hold
+    concurrently, and which bot preset matches their appetite. The user
+    is free to ignore it and subscribe to whatever they want.
+    """
+    from app.strategies.tiny_account_advisor import (
+        PRESETS,
+        compute_suggestions,
+    )
+
+    appetite = (risk_appetite or user.risk_appetite or "balanced").lower()
+    if appetite not in PRESETS:
+        appetite = "balanced"
+
+    # Defensive: if broker isn't linked, return an empty-shaped response
+    # rather than 404 — callers (e.g., the connect-success UI) prefer to
+    # render an empty state over an error toast.
+    if not user.tradelocker_token or not user.tradelocker_account_id:
+        empty = compute_suggestions(0.0, appetite, [])  # type: ignore[arg-type]
+        return _advisor_to_json(empty, connected=False)
+
+    token = decrypt(user.tradelocker_token)
+    if not token:
+        empty = compute_suggestions(0.0, appetite, [])  # type: ignore[arg-type]
+        return _advisor_to_json(empty, connected=False)
+
+    client = TradeLockerClient(env=user.tradelocker_env or "demo")
+    try:
+        state = await client.get_account_state(
+            user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+        )
+    except TradeLockerError as exc:
+        logger.info("advisor: account state lookup failed: %s", exc)
+        state = {}
+
+    balance = float(
+        (state or {}).get("balance")
+        or (state or {}).get("projectedBalance")
+        or 0.0
+    )
+
+    # Pull the broker's instrument catalog. Cached per-process in the client.
+    try:
+        broker_instruments = await client.get_instruments(
+            user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+        )
+        names = [i.get("name") for i in broker_instruments if i.get("name")]
+    except TradeLockerError as exc:
+        logger.info("advisor: instruments lookup failed: %s", exc)
+        names = []
+
+    result = compute_suggestions(balance, appetite, names)  # type: ignore[arg-type]
+    return _advisor_to_json(result, connected=True)
+
+
+def _advisor_to_json(result, *, connected: bool) -> dict:
+    """Flatten the dataclass response into a JSON-friendly dict."""
+    preset = result.preset
+    return {
+        "connected": connected,
+        "balance_usd": result.balance_usd,
+        "risk_appetite": result.risk_appetite,
+        "preset": {
+            "label": preset.label,
+            "description": preset.description,
+            "confidence_threshold": preset.confidence_threshold,
+            "target_rr": preset.target_rr,
+            "max_margin_pct_per_pair": preset.max_margin_pct_per_pair,
+            "recommended_bots": list(preset.recommended_bots),
+        },
+        "concurrent_positions_at_min_lot": result.concurrent_positions_at_min_lot,
+        "suggestions": [
+            {
+                "symbol": s.symbol,
+                "init_margin_usd": s.init_margin_usd,
+                "max_lot_fit": s.max_lot_fit,
+                "margin_pct_of_balance": s.margin_pct_of_balance,
+                "fits": s.fits,
+                "warn": s.warn,
+                "typical_daily_pct": s.typical_daily_pct,
+                "note": s.note,
+                "broker_confirms_at_order_time": s.broker_confirms_at_order_time,
+            }
+            for s in result.suggestions
+        ],
+        "skipped": result.skipped,
+    }
