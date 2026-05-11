@@ -195,8 +195,14 @@ async def reconcile_all_users() -> dict:
     return total
 
 
-async def periodic_reconciliation_task(interval_seconds: int = 600) -> None:
-    """Background task: run reconciliation every 10 min.
+async def periodic_reconciliation_task(interval_seconds: int = 1800) -> None:
+    """Background task: run reconciliation every 30 min.
+
+    Bumped 10m → 30m on 2026-05-11 — for a single-user system the drift
+    window we trade against detection latency is negligible, and 3× fewer
+    broker round-trips reduces queue depth during broker slowdowns. The
+    runner's per-tick broker-truth gating still catches drift before any
+    trade is placed; this background task is the belt-and-suspenders.
 
     Started from app lifespan. Cancellable on shutdown.
     """

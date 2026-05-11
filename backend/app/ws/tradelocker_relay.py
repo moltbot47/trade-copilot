@@ -42,7 +42,14 @@ logger = logging.getLogger(__name__)
 
 
 # --------- Tunables ---------
-POLL_INTERVAL_S = 2.0
+# Bumped 2s → 15s on 2026-05-11. The relay polls TradeLocker for account
+# state + positions on this interval to drive the real-time dashboard.
+# With 2s polling we generated ~30 broker round-trips per minute per user,
+# which during a broker slowdown (today's 12s TL timeouts) backed up the
+# event loop and contributed to /health timeouts + Discord heartbeat
+# misses. 15s keeps the dashboard "live enough" (typical PnL move per
+# 15s on a $5 account is < $0.01) while cutting load 7.5×.
+POLL_INTERVAL_S = 15.0
 UPDATE_DEBOUNCE_S = 5.0
 AUTH_BACKOFF_S = 300.0  # 5min after persistent 401
 TRANSIENT_BACKOFF_S = 5.0  # short pause after a transient error

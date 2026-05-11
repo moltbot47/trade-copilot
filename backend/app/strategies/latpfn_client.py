@@ -14,6 +14,7 @@ Real endpoint contract (planned):
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Optional
@@ -52,20 +53,32 @@ class LaTPFNClient:
         mean and std are arrays of length n_predict, in the same units as
         bars["close"].
         """
-        if "close" not in bars.columns or len(bars) < 2:
-            raise ValueError("bars must have a 'close' column with >= 2 rows")
-        closes = bars["close"].astype(float).to_numpy()
+        # Bar → closes conversion is pandas-heavy on a 240-row frame and was
+        # blocking the asyncio event loop long enough for Discord's gateway
+        # heartbeat to miss + Fly's /health probe to time out. Offloading
+        # the sync prep to a worker thread leaves the loop free during the
+        # block — the GIL is released by pandas' C extensions so we get real
+        # parallelism even on a shared-cpu Fly machine. Same change in the
+        # mock + post-response paths below.
+        def _prep_closes(df: pd.DataFrame) -> np.ndarray:
+            if "close" not in df.columns or len(df) < 2:
+                raise ValueError("bars must have a 'close' column with >= 2 rows")
+            return df["close"].astype(float).to_numpy()
+
+        closes = await asyncio.to_thread(_prep_closes, bars)
         current = float(closes[-1])
 
         if self.is_mock:
-            mean, std = self._mock_forecast(closes, n_predict)
-            return {
-                "mean": mean.tolist(),
-                "std": std.tolist(),
-                "current_price": current,
-            }
+            def _mock_payload() -> dict:
+                mean, std = self._mock_forecast(closes, n_predict)
+                return {
+                    "mean": mean.tolist(),
+                    "std": std.tolist(),
+                    "current_price": current,
+                }
+            return await asyncio.to_thread(_mock_payload)
 
-        # Real HTTP call
+        # Real HTTP call — already non-blocking via httpx.
         endpoint = self.endpoint_url or ""
         payload = {"closes": closes.tolist(), "n_predict": int(n_predict)}
         try:
@@ -75,17 +88,22 @@ class LaTPFNClient:
                 data = r.json()
         except httpx.HTTPError as exc:
             logger.warning("LaT-PFN remote forecast failed (%s) — falling back to mock", exc)
-            mean, std = self._mock_forecast(closes, n_predict)
-            return {
-                "mean": mean.tolist(),
-                "std": std.tolist(),
-                "current_price": current,
-                "fallback": True,
-            }
+            def _fallback_payload() -> dict:
+                mean, std = self._mock_forecast(closes, n_predict)
+                return {
+                    "mean": mean.tolist(),
+                    "std": std.tolist(),
+                    "current_price": current,
+                    "fallback": True,
+                }
+            return await asyncio.to_thread(_fallback_payload)
 
-        mean = np.asarray(data["mean"], dtype=float)
-        std = np.asarray(data["std"], dtype=float)
-        return {"mean": mean.tolist(), "std": std.tolist(), "current_price": current}
+        def _post_response(d: dict) -> dict:
+            mean = np.asarray(d["mean"], dtype=float)
+            std = np.asarray(d["std"], dtype=float)
+            return {"mean": mean.tolist(), "std": std.tolist(), "current_price": current}
+
+        return await asyncio.to_thread(_post_response, data)
 
     def _mock_forecast(
         self, closes: np.ndarray, n_predict: int

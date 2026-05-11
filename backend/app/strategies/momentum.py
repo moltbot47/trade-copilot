@@ -79,7 +79,11 @@ class LatPFNMomentumStrategy(Strategy):
         if bars is None or len(bars) < max(self.atr_period + 1, 16):
             return None
 
-        atr = compute_atr(bars, self.atr_period)
+        # Offload pandas-heavy ATR computation to a worker thread so the
+        # event loop stays responsive — same rationale as the wraps in
+        # latpfn_client.forecast and quant_strategy.
+        import asyncio as _aio
+        atr = await _aio.to_thread(compute_atr, bars, self.atr_period)
         if not np.isfinite(atr) or atr <= 0:
             return None
 

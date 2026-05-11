@@ -110,7 +110,10 @@ class LatPFNQuantStrategy(Strategy):
             except Exception as exc:  # pragma: no cover — defensive
                 logger.warning("on_bar ratchet failed for %s: %s", symbol, exc)
 
-        atr = compute_atr(bars, self.atr_period)
+        # Offload compute_atr to a worker thread; same rationale as in
+        # forecast_view above.
+        import asyncio as _aio
+        atr = await _aio.to_thread(compute_atr, bars, self.atr_period)
         if not np.isfinite(atr) or atr <= 0:
             return None
 
@@ -179,7 +182,11 @@ class LatPFNQuantStrategy(Strategy):
         per-tick management decisions (forecast reversal check)."""
         if bars is None or len(bars) < self.atr_period + 1:
             return None
-        atr = compute_atr(bars, self.atr_period)
+        # compute_atr is pandas-heavy on a 240-row frame; offload to a
+        # worker thread so the event loop stays responsive during ticks.
+        # See app.strategies.latpfn_client.forecast for the same pattern.
+        import asyncio as _aio
+        atr = await _aio.to_thread(compute_atr, bars, self.atr_period)
         if not np.isfinite(atr) or atr <= 0:
             return None
         try:
