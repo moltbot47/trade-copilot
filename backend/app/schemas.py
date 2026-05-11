@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # ---------- Users ----------
@@ -83,6 +83,19 @@ class TradeLockerConnect(BaseModel):
     # either (a) auto-link the only account, or (b) refuse with a 409
     # carrying the candidate list so the frontend can prompt.
     account_id: Optional[str] = None
+
+    # Strip whitespace BEFORE the field-level pattern check runs. Without
+    # this, a user copy-pasting "GENFX " (trailing space) produced a 422
+    # with no useful error because the regex `^[A-Za-z0-9_-]+$` rejects
+    # whitespace anywhere — including padding. mode="before" runs ahead of
+    # the pattern check; an empty stripped value still hits min_length=1
+    # and surfaces a more accurate "must be non-empty" message.
+    @field_validator("server", "password", mode="before")
+    @classmethod
+    def _strip_whitespace(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
 
 class TradeLockerAccountListItem(BaseModel):

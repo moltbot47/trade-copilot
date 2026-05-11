@@ -131,7 +131,28 @@ async function request<T>(
       if (body?.detail !== undefined) {
         rawDetail = body.detail;
         if (typeof body.detail === "string") backendDetail = body.detail;
-        else if (typeof body.detail === "object" && body.detail !== null) {
+        else if (Array.isArray(body.detail)) {
+          // FastAPI/Pydantic 422 shape — detail is a list of field errors
+          // like [{loc, msg, type}]. Surface the first one in a human
+          // form: "server: must be letters, digits, dash, or underscore".
+          // Falls back to count when we can't parse the shape we expect.
+          const first = body.detail[0] as
+            | { loc?: unknown[]; msg?: string }
+            | undefined;
+          if (first?.msg) {
+            const loc = Array.isArray(first.loc)
+              ? first.loc
+                  .filter((p) => p !== "body")
+                  .map(String)
+                  .join(".")
+              : "";
+            backendDetail = loc ? `${loc}: ${first.msg}` : first.msg;
+          } else {
+            backendDetail = `Validation failed (${body.detail.length} error${
+              body.detail.length === 1 ? "" : "s"
+            })`;
+          }
+        } else if (typeof body.detail === "object" && body.detail !== null) {
           // Object form — surface its `message` as the user-facing string.
           const msg = (body.detail as { message?: unknown }).message;
           if (typeof msg === "string") backendDetail = msg;
@@ -218,9 +239,13 @@ export const api = {
     request<ConnectResponse>("/api/tradelocker/connect", {
       method: "POST",
       body: JSON.stringify({
-        email,
-        password,
-        server,
+        // Trim defensively. Backend also strips whitespace before its
+        // pattern validation, but doing it here too means the network
+        // payload is already clean — easier to debug if anything goes
+        // sideways later.
+        email: email.trim(),
+        password: password.trim(),
+        server: server.trim(),
         env,
         // Backend omits the field rather than reading null/undefined.
         ...(accountId ? { account_id: accountId } : {}),

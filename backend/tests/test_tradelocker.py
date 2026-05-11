@@ -172,3 +172,52 @@ def test_account_state_with_lookup_failure_still_returns_connected(client, auth_
     body = res.json()
     assert body["connected"] is True
     assert body["balance"] is None
+
+
+def test_connect_strips_whitespace_from_server(client, auth_headers):
+    """Real users copy-paste with trailing/leading whitespace and the
+    `^[A-Za-z0-9_-]+$` server regex used to reject those payloads with a
+    422 and no useful UI hint. The schema's field_validator now strips
+    before the regex fires."""
+    with patch(
+        "app.api.tradelocker.TradeLockerClient.authenticate",
+        new=AsyncMock(return_value=_FAKE_AUTH),
+    ):
+        res = client.post(
+            "/api/tradelocker/connect",
+            headers=auth_headers,
+            json={
+                "email": "trader@example.com",
+                "password": "secret",
+                "server": "  GENFX  ",  # ← would have been rejected pre-fix
+                "env": "demo",
+            },
+        )
+    assert res.status_code in (200, 201), res.text
+    body = res.json()
+    assert body["status"] == "connected"
+
+
+def test_connect_strips_whitespace_from_password(client, auth_headers):
+    """Same defense applied to password. The broker still validates the
+    actual creds upstream; we just clean up the wire payload."""
+    with patch(
+        "app.api.tradelocker.TradeLockerClient.authenticate",
+        new=AsyncMock(return_value=_FAKE_AUTH),
+    ) as auth_mock:
+        client.post(
+            "/api/tradelocker/connect",
+            headers=auth_headers,
+            json={
+                "email": "trader@example.com",
+                "password": "  secret  ",
+                "server": "GENFX",
+                "env": "demo",
+            },
+        )
+    # The broker call should receive the stripped password, not the padded one.
+    auth_mock.assert_awaited_once()
+    _, kwargs = auth_mock.await_args
+    args = auth_mock.await_args.args
+    # authenticate(email, password, server) is positional in the runner
+    assert args[1] == "secret"
