@@ -1242,6 +1242,72 @@ class QuantRunner:
                             if user.max_lot_override is not None and user.max_lot_override > 0:
                                 sig.qty = min(sig.qty, float(user.max_lot_override))
 
+                            # ---- Step 5: Margin pre-flight ----
+                            # Before 2026-05-11 we just placed the order and let
+                            # the broker reject it with "Not enough margin" — 53
+                            # rejections in one hour for butler. Now: estimate
+                            # required margin from the static advisor table,
+                            # compare to available_funds, AUTO-SHRINK lot to fit
+                            # (down to broker min lot 0.01). If even 0.01 lot
+                            # exceeds balance, skip with skip_insufficient_margin.
+                            try:
+                                from app.strategies.tiny_account_advisor import (
+                                    _MARGIN_AT_MIN_LOT_USD,
+                                )
+                                MIN_LOT = 0.01
+                                MARGIN_BUFFER = 0.90  # 10% safety
+                                margin_per_min_lot = _MARGIN_AT_MIN_LOT_USD.get(
+                                    symbol.upper(), 5.0
+                                )
+                                available = 0.0
+                                if account_state and isinstance(account_state, dict):
+                                    available = float(
+                                        account_state.get("availableFunds")
+                                        or account_state.get("balance")
+                                        or 0
+                                    )
+                                # How many 0.01-lot units can we afford with the buffer?
+                                affordable_units = max(
+                                    0.0,
+                                    (available * MARGIN_BUFFER) / max(margin_per_min_lot, 1e-9),
+                                )
+                                max_affordable_lot = affordable_units * MIN_LOT
+                                # Don't grow the lot — only shrink. Round to nearest 0.01.
+                                target_qty = min(sig.qty, max_affordable_lot)
+                                target_qty = round(target_qty / MIN_LOT) * MIN_LOT
+                                if target_qty < MIN_LOT - 1e-9:
+                                    # Can't even afford the broker minimum.
+                                    self._log_tick(
+                                        symbol,
+                                        "skip_insufficient_margin",
+                                        current_price=current_price,
+                                        forecast_view=forecast_view,
+                                        threshold=threshold,
+                                        reason=(
+                                            f"available ${available:.2f} < required "
+                                            f"~${margin_per_min_lot:.2f} for 0.01 lot of {symbol}"
+                                        ),
+                                        user_id=user.id,
+                                        extra={
+                                            "available_funds": round(available, 2),
+                                            "margin_per_min_lot": margin_per_min_lot,
+                                            "min_lot": MIN_LOT,
+                                        },
+                                    )
+                                    continue
+                                if target_qty < sig.qty - 1e-9:
+                                    # Shrank lot to fit balance — log so it's
+                                    # visible without surfacing a skip.
+                                    logger.info(
+                                        "lot auto-shrunk for user=%s %s: %.4f → %.4f "
+                                        "(avail=$%.2f, margin/0.01=$%.2f)",
+                                        user.id, symbol, sig.qty, target_qty,
+                                        available, margin_per_min_lot,
+                                    )
+                                    sig.qty = target_qty
+                            except Exception as exc:  # noqa: BLE001
+                                logger.debug("margin preflight skipped (%s) — falling through", exc)
+
                             try:
                                 await self._open_new_cohort(tm, sig, user, token, client)
                                 tm_db.commit()
