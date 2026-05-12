@@ -1447,25 +1447,31 @@ class QuantRunner:
                 pos_obj = same_symbol_side[0]
                 pos_id = str(pos_obj.get("id"))
 
-        # Verify SL/TP made it onto the broker. If not, repair via modify_position.
-        # Some TL deployments silently drop sl/tp on the order create — we send
-        # a follow-up modify so every entry has a stop. Without this we get
-        # uncovered positions like the 2026-05-10 hedged ETH mess.
+        # Verify SL/TP made it onto the broker. If not, repair via modify_position
+        # THEN re-verify by re-fetching the position. Without the re-verify
+        # check, TradeLocker can return 200 OK from modify_position and still
+        # silently drop the level (e.g., too-close-to-current-price), leaving
+        # an uncovered position on a live account.
+        #
+        # Field name fix 2026-05-11: TL positions expose `stopLossId` /
+        # `takeProfitId` (with the `Id` suffix — IDs of internal child orders),
+        # NOT `stopLoss` / `takeProfit`. Previous code read the wrong key →
+        # every position appeared to lack SL/TP → modify always fired → the
+        # downstream re-verify gap is what actually let silent-drop slip
+        # through. Both are fixed below.
+        def _has_sl(p: dict) -> bool:
+            return bool(p.get("stopLossId"))
+
+        def _has_tp(p: dict) -> bool:
+            return bool(p.get("takeProfitId"))
+
         if pos_id and pos_obj:
-            broker_sl = pos_obj.get("stopLoss") or pos_obj.get("stop_loss")
-            broker_tp = pos_obj.get("takeProfit") or pos_obj.get("take_profit")
-            needs_sl_repair = (
-                sig.stop_loss is not None
-                and (broker_sl is None or float(broker_sl) == 0.0)
-            )
-            needs_tp_repair = (
-                sig.take_profit is not None
-                and (broker_tp is None or float(broker_tp) == 0.0)
-            )
+            needs_sl_repair = sig.stop_loss is not None and not _has_sl(pos_obj)
+            needs_tp_repair = sig.take_profit is not None and not _has_tp(pos_obj)
             if needs_sl_repair or needs_tp_repair:
                 logger.warning(
-                    "broker dropped sl=%s tp=%s on order — repairing pos=%s",
-                    broker_sl, broker_tp, pos_id,
+                    "broker dropped sl/tp on order → repairing pos=%s (needs_sl=%s needs_tp=%s)",
+                    pos_id, needs_sl_repair, needs_tp_repair,
                 )
                 try:
                     await client.modify_position(
@@ -1486,6 +1492,45 @@ class QuantRunner:
                     except Exception as exc2:
                         logger.exception("emergency close failed pos=%s: %s", pos_id, exc2)
                     raise RuntimeError(f"position {pos_id} could not have SL set; closed defensively")
+
+                # Re-verify the levels actually attached. Critical because
+                # TradeLocker can return 200 OK while silently dropping the
+                # level — e.g. when it's inside the broker's min-distance
+                # band. Without this re-check, the runner trusts the OK and
+                # records a cohort with phantom SL/TP.
+                try:
+                    fresh = await client.get_positions(
+                        account_id, token, user.tradelocker_acc_num or "1",
+                    )
+                    fresh_pos = next((p for p in fresh if str(p.get("id")) == pos_id), None)
+                except Exception as exc:
+                    logger.warning("post-attach reverify fetch failed for %s: %s", pos_id, exc)
+                    fresh_pos = None
+
+                if fresh_pos is not None:
+                    still_missing_sl = needs_sl_repair and not _has_sl(fresh_pos)
+                    still_missing_tp = needs_tp_repair and not _has_tp(fresh_pos)
+                    if still_missing_sl or still_missing_tp:
+                        logger.error(
+                            "SL/TP SILENTLY DROPPED by broker on pos %s "
+                            "(still_missing sl=%s tp=%s) — closing defensively",
+                            pos_id, still_missing_sl, still_missing_tp,
+                        )
+                        try:
+                            await client.close_position(
+                                pos_id,
+                                token=token,
+                                acc_num=user.tradelocker_acc_num or "1",
+                            )
+                        except Exception as exc2:
+                            logger.exception(
+                                "emergency close after silent-drop failed pos=%s: %s",
+                                pos_id, exc2,
+                            )
+                        raise RuntimeError(
+                            f"position {pos_id} could not have SL/TP attached "
+                            f"(broker silently dropped) — closed defensively"
+                        )
         cohort = tm.open_cohort(
             instrument=sig.symbol,
             side=sig.side,

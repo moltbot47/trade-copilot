@@ -212,8 +212,16 @@ class MockBroker:
                 "qty": p.qty,
                 "avgPrice": p.entry_price,
                 "tradableInstrumentId": p.tradable_instrument_id,
+                # Legacy price fields — older tests asserted on these.
                 "stopLoss": p.stop_loss,
                 "takeProfit": p.take_profit,
+                # The real TL surface for SL/TP is child-order IDs, not
+                # prices. Runner.py post-2026-05-11 reads these to verify a
+                # protect-attach actually took. We synthesize an ID whenever
+                # the price is set so the runner's verify check passes for
+                # mocked positions.
+                "stopLossId": f"sl-{p.id}" if p.stop_loss is not None else None,
+                "takeProfitId": f"tp-{p.id}" if p.take_profit is not None else None,
                 "openDate": p.open_date,
                 "orderId": p.order_id,
                 "unrealizedPl": 0.0,
