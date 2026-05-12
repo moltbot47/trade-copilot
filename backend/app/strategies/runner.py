@@ -1132,6 +1132,36 @@ class QuantRunner:
                     if not open_cohorts:
                         sig = await strategy.on_bar(symbol, bars)
                         if sig is not None and sig.extra.get("kind") == "entry":
+                            # ---- Step 0: Per-user instrument filter ----
+                            # If the user's subscription has an
+                            # allowed_instruments CSV set, the symbol must
+                            # be in it. NULL/empty = "all bot instruments"
+                            # (legacy behavior). This is how operators
+                            # exclude individual symbols (e.g., ETH) for a
+                            # specific user without removing them from
+                            # every subscriber.
+                            sub_for_user = next(
+                                (s for s in user.subscriptions
+                                 if s.bot_id == self.bot_id),
+                                None,
+                            )
+                            if sub_for_user and sub_for_user.allowed_instruments:
+                                allowed_set = {
+                                    s.strip().upper()
+                                    for s in sub_for_user.allowed_instruments.split(",")
+                                    if s.strip()
+                                }
+                                if symbol.upper() not in allowed_set:
+                                    self._log_tick(
+                                        symbol, "skip_user_filter",
+                                        current_price=current_price,
+                                        forecast_view=forecast_view,
+                                        threshold=threshold,
+                                        reason=f"user opted out: allowed={sorted(allowed_set)}",
+                                        user_id=user.id,
+                                    )
+                                    continue
+
                             # ---- Step 1: Global panic switch ----
                             if getattr(user, "bot_paused", False):
                                 self._log_tick(
