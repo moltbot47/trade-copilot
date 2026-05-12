@@ -145,11 +145,13 @@ PRESETS: dict[str, AppetitePreset] = {
     "balanced": AppetitePreset(
         label="Balanced",
         description=(
-            "Moderate signals (≥0.8σ). 1.5:1 reward-to-risk. The middle "
-            "ground — what most users should pick first."
+            "Moderate signals (≥0.8σ). 1.2:1 reward-to-risk. The middle "
+            "ground — what most users should pick first. Tuned 2026-05-11 "
+            "after backtest showed 1.0:1 wins more often than 1.5:1 but "
+            "expectancy peaks near 1.2:1 on 1m/5m scalping."
         ),
         confidence_threshold=0.8,
-        target_rr=1.5,
+        target_rr=1.2,
         max_margin_pct_per_pair=0.50,
         recommended_bots=("latpfn-quant", "latpfn-momentum"),
     ),
