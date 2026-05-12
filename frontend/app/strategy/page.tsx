@@ -431,19 +431,39 @@ export default function StrategyPage() {
           aria-labelledby="analyze-heading"
           style={{ borderColor: "var(--accent-dim)" }}
         >
+          {/* Header — flexWrap lets the metadata drop to its own line on
+              mobile instead of overlapping the wrapping h2 (mobile fix
+              2026-05-12). h2 gets whiteSpace:nowrap so the title stays
+              on one line; the metadata flows naturally beside it on wide
+              viewports and onto the next line on narrow. */}
           <header
             style={{
               display: "flex",
+              flexWrap: "wrap",
               justifyContent: "space-between",
               alignItems: "baseline",
               marginBottom: "0.5rem",
-              gap: "0.5rem",
+              gap: "0.25rem 0.75rem",
             }}
           >
-            <h2 id="analyze-heading" style={{ margin: 0 }} className="accent">
+            <h2
+              id="analyze-heading"
+              style={{ margin: 0, whiteSpace: "nowrap" }}
+              className="accent"
+            >
               {">"} live model view
             </h2>
-            <span className="dim" style={{ fontSize: "0.78rem" }}>
+            <span
+              className="dim"
+              style={{
+                fontSize: "0.78rem",
+                lineHeight: 1.4,
+                // Let the metadata wrap naturally; if it doesn't fit on
+                // the same row as h2, flex-wrap puts it on the next line
+                // (preventing the iPhone overlap we just fixed).
+                minWidth: 0,
+              }}
+            >
               {analyzing
                 ? "calling LaT-PFN…"
                 : analysis
