@@ -20,7 +20,9 @@ BOT_CFG = dict(
     backtest_win_rate=0.0,
     backtest_profit_factor=0.0,
     risk_level=4,
-    instruments_csv="BTCUSD,ETHUSD",
+    # SP500 added 2026-05-11 — cheapest index margin (~$3.72 at 0.01 lot)
+    # exposes Quant's aggressive 0.5σ entries to a smoother instrument.
+    instruments_csv="BTCUSD,ETHUSD,SP500",
 )
 
 TIMEFRAMES = ["1m", "5m"]
