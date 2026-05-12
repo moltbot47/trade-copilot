@@ -1498,39 +1498,115 @@ class QuantRunner:
                 # level — e.g. when it's inside the broker's min-distance
                 # band. Without this re-check, the runner trusts the OK and
                 # records a cohort with phantom SL/TP.
-                try:
-                    fresh = await client.get_positions(
-                        account_id, token, user.tradelocker_acc_num or "1",
-                    )
-                    fresh_pos = next((p for p in fresh if str(p.get("id")) == pos_id), None)
-                except Exception as exc:
-                    logger.warning("post-attach reverify fetch failed for %s: %s", pos_id, exc)
-                    fresh_pos = None
+                #
+                # Race we just hit in prod (2026-05-11): TL rate-limits
+                # /positions to ~1/sec, and we already called it in the
+                # same tick to find pos_id. The re-fetch lands at 429 and
+                # the old code treated that as "skip verify" → position
+                # stays unprotected.
+                #
+                # Hardened flow:
+                #   1) Retry the fetch up to 3× with backoff. 429s clear
+                #      within ~1 second.
+                #   2) If still failing, close defensively. We'd rather
+                #      lose an entry we can't verify than carry an
+                #      unprotected live position.
+                #   3) On partial attach (e.g., TP yes, SL no), retry the
+                #      dropped level once before deciding to close.
+                fresh_pos: dict | None = None
+                for attempt in range(3):
+                    try:
+                        fresh = await client.get_positions(
+                            account_id, token, user.tradelocker_acc_num or "1",
+                        )
+                        fresh_pos = next(
+                            (p for p in fresh if str(p.get("id")) == pos_id), None,
+                        )
+                        if fresh_pos is not None:
+                            break
+                    except Exception as exc:
+                        logger.warning(
+                            "post-attach reverify attempt %d failed for %s: %s",
+                            attempt + 1, pos_id, exc,
+                        )
+                    # Exponential-ish backoff to clear TL rate-limit window.
+                    await asyncio.sleep(0.5 * (attempt + 1))
 
-                if fresh_pos is not None:
-                    still_missing_sl = needs_sl_repair and not _has_sl(fresh_pos)
-                    still_missing_tp = needs_tp_repair and not _has_tp(fresh_pos)
-                    if still_missing_sl or still_missing_tp:
-                        logger.error(
-                            "SL/TP SILENTLY DROPPED by broker on pos %s "
-                            "(still_missing sl=%s tp=%s) — closing defensively",
-                            pos_id, still_missing_sl, still_missing_tp,
+                if fresh_pos is None:
+                    # All 3 retries failed → we don't know if SL/TP attached.
+                    # Conservative choice: close defensively. An entry we
+                    # can't verify is worse than no entry.
+                    logger.error(
+                        "post-attach reverify exhausted retries for pos %s "
+                        "— closing defensively (unverified protection)",
+                        pos_id,
+                    )
+                    try:
+                        await client.close_position(
+                            pos_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
                         )
-                        try:
-                            await client.close_position(
-                                pos_id,
-                                token=token,
-                                acc_num=user.tradelocker_acc_num or "1",
-                            )
-                        except Exception as exc2:
-                            logger.exception(
-                                "emergency close after silent-drop failed pos=%s: %s",
-                                pos_id, exc2,
-                            )
-                        raise RuntimeError(
-                            f"position {pos_id} could not have SL/TP attached "
-                            f"(broker silently dropped) — closed defensively"
+                    except Exception as exc:
+                        logger.exception("close after retry-exhaustion failed pos=%s: %s", pos_id, exc)
+                    raise RuntimeError(
+                        f"position {pos_id} could not be verified (rate-limit on re-fetch) — closed defensively"
+                    )
+
+                still_missing_sl = needs_sl_repair and not _has_sl(fresh_pos)
+                still_missing_tp = needs_tp_repair and not _has_tp(fresh_pos)
+
+                # Partial attach — broker took ONE level but silently dropped
+                # the other. Retry the dropped level ONCE before closing.
+                # This happens when SL/TP are asymmetric vs current price
+                # (one was inside the min-distance band, the other wasn't).
+                if (still_missing_sl or still_missing_tp) and not (still_missing_sl and still_missing_tp):
+                    logger.warning(
+                        "partial SL/TP attach on pos %s (missing sl=%s tp=%s) — second-attempt repair",
+                        pos_id, still_missing_sl, still_missing_tp,
+                    )
+                    try:
+                        await client.modify_position(
+                            pos_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                            stop_loss=sig.stop_loss if still_missing_sl else None,
+                            take_profit=sig.take_profit if still_missing_tp else None,
                         )
+                        # One more re-verify after the second attempt
+                        await asyncio.sleep(0.6)
+                        fresh = await client.get_positions(
+                            account_id, token, user.tradelocker_acc_num or "1",
+                        )
+                        fresh_pos = next(
+                            (p for p in fresh if str(p.get("id")) == pos_id), fresh_pos,
+                        )
+                        still_missing_sl = needs_sl_repair and not _has_sl(fresh_pos)
+                        still_missing_tp = needs_tp_repair and not _has_tp(fresh_pos)
+                    except Exception as exc:
+                        logger.warning("second-attempt repair raised on pos %s: %s", pos_id, exc)
+
+                if still_missing_sl or still_missing_tp:
+                    logger.error(
+                        "SL/TP SILENTLY DROPPED by broker on pos %s "
+                        "(still_missing sl=%s tp=%s) — closing defensively",
+                        pos_id, still_missing_sl, still_missing_tp,
+                    )
+                    try:
+                        await client.close_position(
+                            pos_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                        )
+                    except Exception as exc2:
+                        logger.exception(
+                            "emergency close after silent-drop failed pos=%s: %s",
+                            pos_id, exc2,
+                        )
+                    raise RuntimeError(
+                        f"position {pos_id} could not have SL/TP attached "
+                        f"(broker silently dropped) — closed defensively"
+                    )
         cohort = tm.open_cohort(
             instrument=sig.symbol,
             side=sig.side,
