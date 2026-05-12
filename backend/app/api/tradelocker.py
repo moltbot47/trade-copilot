@@ -233,6 +233,100 @@ async def account_state(user: User = Depends(get_current_user)) -> TradeLockerAc
     )
 
 
+@router.get("/positions")
+async def list_positions(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """List open positions on the linked broker account.
+
+    Returns broker-truth, including the resolved symbol name (via the
+    /instruments lookup) and SL/TP IDs so the UI can show "no SL set"
+    in red when those are missing. Used by the dashboard's modify-SL/TP
+    modal.
+    """
+    if not user.tradelocker_token or not user.tradelocker_account_id:
+        return {"positions": []}
+    token = decrypt(user.tradelocker_token)
+    if not token:
+        return {"positions": []}
+
+    client = TradeLockerClient(env=user.tradelocker_env or "demo")
+    try:
+        positions = await client.get_positions(
+            user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+        )
+    except TradeLockerError as exc:
+        logger.info("list_positions broker error: %s", exc)
+        return {"positions": []}
+
+    # Resolve tradableInstrumentId → symbol via one /instruments call.
+    try:
+        inst = await client.get_instruments(
+            user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+        )
+        tid_to_name = {i.get("tradableInstrumentId"): i.get("name") for i in inst}
+    except TradeLockerError:
+        tid_to_name = {}
+
+    return {
+        "positions": [
+            {
+                "id": str(p.get("id")),
+                "symbol": tid_to_name.get(p.get("tradableInstrumentId"), f"tid#{p.get('tradableInstrumentId')}"),
+                "side": p.get("side"),
+                "qty": float(p.get("qty") or 0),
+                "avg_price": float(p.get("avgPrice") or 0),
+                "unrealized_pl": float(p.get("unrealizedPl") or 0),
+                "has_sl": bool(p.get("stopLossId")),
+                "has_tp": bool(p.get("takeProfitId")),
+                "stop_loss_id": str(p.get("stopLossId") or "") or None,
+                "take_profit_id": str(p.get("takeProfitId") or "") or None,
+            }
+            for p in positions
+        ],
+    }
+
+
+@router.post("/positions/{position_id}/modify", response_model=StatusResponse)
+async def modify_position_levels(
+    position_id: str,
+    payload: dict,
+    user: User = Depends(get_current_user),
+) -> StatusResponse:
+    """Set/update stop loss and/or take profit on an open broker position.
+
+    Wraps TradeLockerClient.modify_position. At least one of `stop_loss`
+    or `take_profit` is required. Broker accepts a price; we pass float.
+    Returns {"status": "ok"} on success. Errors are surfaced as HTTP 400
+    so the UI can show "broker rejected: too close to current price" etc.
+    """
+    if not user.tradelocker_token or not user.tradelocker_account_id:
+        raise HTTPException(status_code=400, detail="no broker linked")
+    token = decrypt(user.tradelocker_token)
+    if not token:
+        raise HTTPException(status_code=400, detail="broker token unreadable")
+
+    sl = payload.get("stop_loss")
+    tp = payload.get("take_profit")
+    if sl is None and tp is None:
+        raise HTTPException(status_code=400, detail="stop_loss or take_profit is required")
+
+    client = TradeLockerClient(env=user.tradelocker_env or "demo")
+    try:
+        await client.modify_position(
+            position_id=position_id,
+            token=token,
+            acc_num=user.tradelocker_acc_num or "1",
+            stop_loss=float(sl) if sl is not None else None,
+            take_profit=float(tp) if tp is not None else None,
+        )
+    except TradeLockerError as exc:
+        logger.info("modify_position(%s) broker error: %s", position_id, exc)
+        raise HTTPException(status_code=400, detail=f"broker rejected: {exc}")
+
+    return StatusResponse(status="ok", detail=position_id)
+
+
 # ---------------------------------------------------------------------
 # Account switcher — list + swap without re-typing credentials
 # ---------------------------------------------------------------------

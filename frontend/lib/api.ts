@@ -253,6 +253,35 @@ export const api = {
     }),
   getAccountState: () =>
     request<AccountState>("/api/tradelocker/account"),
+  // Open positions with broker-side SL/TP status. Drives the dashboard's
+  // "edit SL/TP" modal so the user can fix an unprotected position with
+  // one click instead of digging into the broker UI.
+  listOpenPositions: () =>
+    request<{
+      positions: Array<{
+        id: string;
+        symbol: string;
+        side: "buy" | "sell" | string;
+        qty: number;
+        avg_price: number;
+        unrealized_pl: number;
+        has_sl: boolean;
+        has_tp: boolean;
+        stop_loss_id: string | null;
+        take_profit_id: string | null;
+      }>;
+    }>("/api/tradelocker/positions"),
+  modifyPositionLevels: (
+    positionId: string,
+    levels: { stop_loss?: number; take_profit?: number },
+  ) =>
+    request<{ status: string; detail?: string }>(
+      `/api/tradelocker/positions/${positionId}/modify`,
+      {
+        method: "POST",
+        body: JSON.stringify(levels),
+      },
+    ),
   // Account switcher — list every account on the user's linked TradeLocker
   // session + swap to a different one without re-entering credentials.
   listTradeLockerAccounts: () =>

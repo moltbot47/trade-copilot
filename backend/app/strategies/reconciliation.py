@@ -138,24 +138,74 @@ async def reconcile_user(user_id: int) -> dict:
             pid = str(pos.get("id"))
             if pid not in all_tracked_ids:
                 summary["untracked_positions"] += 1
+                # NEW 2026-05-11: When we find an orphan position with no
+                # SL or TP attached, defensively attach safety levels right
+                # here. This catches the failure mode where the runner
+                # placed an order but crashed before its own modify_position
+                # repair fired — leaving an uncovered position on a live
+                # account, which is the worst possible state.
+                has_sl = bool(pos.get("stopLossId"))
+                has_tp = bool(pos.get("takeProfitId"))
+                unprotected = not (has_sl and has_tp)
+                if unprotected:
+                    summary.setdefault("auto_protected", 0)
+                    avg = float(pos.get("avgPrice") or 0)
+                    side = (pos.get("side") or "").lower()
+                    if avg > 0 and side in ("buy", "sell"):
+                        # Conservative defaults: SL 0.5% adverse, TP 0.8% favorable.
+                        # Side-aware. These are emergency-protect levels, not
+                        # the strategy's optimal — we want to STOP the bleed,
+                        # not maximize edge. The runner manages real levels
+                        # on positions it owns; this branch is for orphans.
+                        if side == "buy":
+                            sl_px = round(avg * (1 - 0.005), 4)
+                            tp_px = round(avg * (1 + 0.008), 4)
+                        else:
+                            sl_px = round(avg * (1 + 0.005), 4)
+                            tp_px = round(avg * (1 - 0.008), 4)
+                        try:
+                            await client.modify_position(
+                                position_id=pid,
+                                token=token,
+                                acc_num=user.tradelocker_acc_num or "1",
+                                stop_loss=sl_px if not has_sl else None,
+                                take_profit=tp_px if not has_tp else None,
+                            )
+                            summary["auto_protected"] += 1
+                            logger.warning(
+                                "AUTO-PROTECTED orphan position user=%s pos=%s side=%s "
+                                "avg=%.4f → sl=%.4f tp=%.4f",
+                                user_id, pid, side, avg, sl_px, tp_px,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "AUTO-PROTECT FAILED for orphan pos=%s: %s — operator must close manually",
+                                pid, exc,
+                            )
                 key = _alert_key("untracked", pid)
                 if _should_alert(key):
                     logger.warning(
-                        "UNTRACKED BROKER POSITION: user=%s pos=%s side=%s qty=%s tid=%s",
+                        "UNTRACKED BROKER POSITION: user=%s pos=%s side=%s qty=%s tid=%s has_sl=%s has_tp=%s",
                         user_id, pid,
                         pos.get("side"), pos.get("qty"),
                         pos.get("tradableInstrumentId"),
+                        has_sl, has_tp,
                     )
                     try:
                         from app.integrations.discord_signals import _webhook_url
                         import httpx
                         url = _webhook_url()
                         if url:
+                            protect_note = (
+                                " · auto-protected with conservative SL/TP"
+                                if unprotected else ""
+                            )
                             msg = (
                                 f"⚠️ UNTRACKED BROKER POSITION: user_id={user_id} "
-                                f"pos={pid} side={pos.get('side')} qty={pos.get('qty')}. "
+                                f"pos={pid} side={pos.get('side')} qty={pos.get('qty')} "
+                                f"has_sl={has_sl} has_tp={has_tp}{protect_note}. "
                                 f"Bot is NOT managing this position (manual trade or "
-                                f"crashed-after-place_order). Manual close recommended."
+                                f"crashed-after-place_order)."
                             )
                             async with httpx.AsyncClient(timeout=5.0) as c:
                                 await c.post(url, json={"content": msg})

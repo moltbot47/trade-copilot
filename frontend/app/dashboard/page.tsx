@@ -8,6 +8,7 @@ import RiskSlider from "@/components/RiskSlider";
 import PnLChart from "@/components/PnLChart";
 import SignalLog from "@/components/SignalLog";
 import InstrumentFilterModal from "@/components/InstrumentFilterModal";
+import OpenPositions from "@/components/OpenPositions";
 import type {
   AccountState,
   Subscription,
@@ -350,6 +351,11 @@ export default function DashboardPage() {
           />
         );
       })()}
+
+      {/* Broker-truth open positions with inline edit for SL/TP. Surfaces
+          any position that's unprotected so the user can fix it in one
+          click instead of digging into TradeLocker. */}
+      <OpenPositions />
 
       {/* PnL + Signals */}
       <section className="card">
