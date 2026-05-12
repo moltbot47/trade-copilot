@@ -362,6 +362,10 @@ export const api = {
       risk_appetite: string;
       user_email: string;
       elapsed_ms: number;
+      // True when ANY symbol fell back to synthetic data. Drives the
+      // "broker feed degraded" banner on /strategy.
+      data_feed_degraded: boolean;
+      synthetic_symbol_count: number;
       items: Array<{
         symbol: string;
         confidence?: number;
@@ -376,6 +380,9 @@ export const api = {
         atr?: number;
         elapsed_ms?: number;
         error?: string;
+        // True when this symbol returned synthetic-fallback bars and the
+        // analyzer refused to forecast on them.
+        is_synthetic?: boolean;
       }>;
     }>("/api/strategy/analyze", {
       method: "POST",

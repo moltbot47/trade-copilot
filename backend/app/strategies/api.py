@@ -419,6 +419,26 @@ async def analyze_now(req: AnalyzeReq, db: Session = Depends(get_db)) -> dict:
             if bars is None or len(bars) < 30:
                 return {"symbol": symbol, "error": "not enough bars"}
 
+            # CRITICAL: refuse to forecast on synthetic-fallback bars.
+            # BarFetcher tags `df.attrs["synthetic"] = True` when the broker
+            # data feed fails. LaT-PFN on synthetic data produces forecasts
+            # that LOOK real but aren't actionable — bars are centered
+            # around 100 with smooth drift, so prices like BTCUSD=$102 and
+            # SP500=$118 sneak through and could mislead a trader. The
+            # runner already skips these via skip_synthetic_data; mirror
+            # that defense here.
+            if bool(getattr(bars, "attrs", {}).get("synthetic", False)):
+                return {
+                    "symbol": symbol,
+                    "is_synthetic": True,
+                    "error": (
+                        "broker feed degraded — using synthetic bars. "
+                        "Reconnect via /connect to refresh the broker token, "
+                        "or wait for the next periodic refresh."
+                    ),
+                    "elapsed_ms": int((time.monotonic() - t0) * 1000),
+                }
+
             atr = await asyncio.to_thread(compute_atr, bars, 14)
             if not atr or atr <= 0:
                 return {"symbol": symbol, "error": "ATR computation failed"}
@@ -469,6 +489,7 @@ async def analyze_now(req: AnalyzeReq, db: Session = Depends(get_db)) -> dict:
     items = await asyncio.gather(*[_one_symbol(s) for s in symbols])
     total_ms = int((time.monotonic() - started) * 1000)
 
+    synthetic_count = sum(1 for it in items if it.get("is_synthetic"))
     return {
         "bot_id": req.bot_id,
         "bot_name": bot.name,
@@ -479,4 +500,9 @@ async def analyze_now(req: AnalyzeReq, db: Session = Depends(get_db)) -> dict:
         "user_email": user.email,
         "items": items,
         "elapsed_ms": total_ms,
+        # Top-level flag so the UI can render a "broker feed degraded"
+        # banner when ANY symbol fell back to synthetic. The per-item
+        # is_synthetic flags drive the per-row warning.
+        "data_feed_degraded": synthetic_count > 0,
+        "synthetic_symbol_count": synthetic_count,
     }

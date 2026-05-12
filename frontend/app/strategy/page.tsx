@@ -458,6 +458,40 @@ export default function StrategyPage() {
             </p>
           )}
 
+          {/* Broker-feed-degraded banner. Surfaces when ANY row in the
+              analysis fell back to synthetic bars. Critical because
+              LaT-PFN on synthetic data produces forecasts that LOOK real
+              (prices centered on 100, smooth drift) but are not
+              actionable. The runner blocks these with skip_synthetic_data;
+              the analyze endpoint blocks them with an error per row;
+              this banner is the user-facing surface. */}
+          {analysis?.data_feed_degraded && (
+            <div
+              role="alert"
+              style={{
+                padding: "0.75rem 1rem",
+                marginBottom: "0.6rem",
+                border: "1px solid var(--warn)",
+                background: "rgba(255, 200, 0, 0.06)",
+              }}
+            >
+              <div style={{ fontWeight: 700, color: "var(--warn)" }}>
+                ⚠ broker feed degraded — {analysis.synthetic_symbol_count} of{" "}
+                {analysis.items.length} symbol
+                {analysis.items.length === 1 ? "" : "s"} returned synthetic
+                fallback data
+              </div>
+              <div className="dim" style={{ fontSize: "0.82rem", marginTop: "0.25rem" }}>
+                LaT-PFN was NOT run on those symbols — synthetic prices look
+                real but produce misleading signals. Reconnect via{" "}
+                <a href="/connect" style={{ color: "var(--warn)", textDecoration: "underline" }}>
+                  /connect
+                </a>{" "}
+                to refresh the broker token, then re-run the analysis.
+              </div>
+            </div>
+          )}
+
           {analyzing && !analysis && (
             <div
               style={{
@@ -522,7 +556,17 @@ export default function StrategyPage() {
                   <span className="accent" style={{ fontWeight: 700 }}>
                     {row.symbol}
                   </span>
-                  {row.error ? (
+                  {row.is_synthetic ? (
+                    <span
+                      style={{
+                        gridColumn: "2 / span 7",
+                        color: "var(--warn)",
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      ⚠ synthetic fallback — broker feed unavailable, forecast skipped
+                    </span>
+                  ) : row.error ? (
                     <span
                       style={{
                         gridColumn: "2 / span 7",
