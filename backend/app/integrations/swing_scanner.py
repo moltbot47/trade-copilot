@@ -228,26 +228,69 @@ async def _post_swing_candidate(row: Any) -> None:
 
 
 async def _one_pass() -> int:
-    """Run one 15m scan + post candidates. Returns the number of alerts posted."""
+    """Run one 15m scan + emit candidates. Returns the number emitted.
+
+    If signal_digest is enabled (default), each candidate is enqueued
+    into the shared digest queue (joins the daily-swing scanner output)
+    and posted as one combined embed every DIGEST_INTERVAL_S. Otherwise
+    each candidate gets its own embed (legacy behavior).
+    """
+    from app.integrations.discord_signals import _CONTRACT_SIZE_PER_LOT
     from app.integrations.latpfn_scan import EXPANDED_INSTRUMENTS, run_scan
+    from app.integrations.signal_digest import DigestRow, enqueue_signal, is_enabled
 
     cfg = _config()
     rows = await run_scan(EXPANDED_INSTRUMENTS, timeout_s=90.0, interval="15m")
     posted = 0
+    digest_on = is_enabled()
     for r in rows:
-        if _should_alert(
+        if not _should_alert(
             r.label, r.snr, r.direction,
             threshold=cfg["threshold"], cooldown_s=cfg["cooldown_s"],
         ):
+            continue
+
+        if digest_on:
+            # Compute the same TP/SL + $ risk/reward the standalone embed
+            # would have shown, so the digest table can display them.
+            levels = _compute_swing_levels(
+                r.current, r.horizon_mean, r.horizon_std, r.direction
+            )
+            entry_p = tp_p = sl_p = rr = risk_u = reward_u = None
+            if levels is not None:
+                entry_p, tp_p, sl_p = levels
+                tp_dist = abs(tp_p - entry_p)
+                sl_dist = abs(entry_p - sl_p)
+                if sl_dist > 0:
+                    rr = tp_dist / sl_dist
+                    contract = _CONTRACT_SIZE_PER_LOT.get(r.label.upper())
+                    if contract is not None:
+                        risk_u = sl_dist * contract * 0.01
+                        reward_u = tp_dist * contract * 0.01
+            await enqueue_signal(DigestRow(
+                source="SWING",
+                symbol=r.label,
+                side="BUY" if r.direction == "LONG" else "SELL",
+                snr=r.snr,
+                drift_pct=r.drift_pct,
+                entry=entry_p,
+                tp=tp_p,
+                sl=sl_p,
+                rr=rr,
+                risk_usd_001=risk_u,
+                reward_usd_001=reward_u,
+            ))
+        else:
             await _post_swing_candidate(r)
-            _mark_alerted(r.label, r.direction)
-            posted += 1
+        _mark_alerted(r.label, r.direction)
+        posted += 1
     logger.info(
-        "swing_scanner: %d/%d above %.2fσ, %d swing candidates posted",
+        "swing_scanner: %d/%d above %.2fσ, %d %s",
         sum(1 for r in rows if abs(r.snr) >= cfg["threshold"]),
         len(rows),
         cfg["threshold"],
         posted,
+        "queued in digest" if digest_on else "candidates posted",
     )
     return posted
 

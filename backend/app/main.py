@@ -440,6 +440,12 @@ async def lifespan(_: FastAPI):
     from app.integrations.swing_scanner import swing_scanner_task
     swing_task = _aio.create_task(swing_scanner_task())
 
+    # Signal digest — batches scanner candidates into one Discord post
+    # every DIGEST_INTERVAL_S seconds (default 10 min). Replaces the per-
+    # symbol pings from each scanner with a single combined embed.
+    from app.integrations.signal_digest import digest_flusher_task
+    digest_task = _aio.create_task(digest_flusher_task())
+
     # Auto-resume runners that were running before the last shutdown.
     try:
         await _auto_resume_runners()
@@ -459,7 +465,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task):
+        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task, digest_task):
             task.cancel()
             try:
                 await task

@@ -155,28 +155,45 @@ def _mark_alerted(symbol: str, direction: str) -> None:
 
 
 async def _one_pass() -> int:
-    """Run one scan + post alerts. Returns the number of alerts posted."""
+    """Run one scan + emit alerts. Returns the number of alerts emitted.
+
+    Emit path: if signal_digest is enabled (default), each candidate is
+    enqueued into the shared digest and the digest_flusher_task posts
+    a single combined embed every DIGEST_INTERVAL_S. Otherwise we fall
+    back to direct per-symbol posts (legacy behavior).
+    """
     from app.integrations.latpfn_scan import EXPANDED_INSTRUMENTS, run_scan
+    from app.integrations.signal_digest import DigestRow, enqueue_signal, is_enabled
 
     cfg = _config()
     rows = await run_scan(EXPANDED_INSTRUMENTS, timeout_s=60.0)
     posted = 0
+    digest_on = is_enabled()
     for r in rows:
-        # Decorate with the labels the embed expects.
         r.confidence_label = _confidence_label(r.snr)  # type: ignore[attr-defined]
         if _should_alert(
             r.label, r.snr, r.direction,
             threshold=cfg["threshold"], cooldown_s=cfg["cooldown_s"],
         ):
-            await _post_opportunity(r)
+            if digest_on:
+                await enqueue_signal(DigestRow(
+                    source="DAILY",
+                    symbol=r.label,
+                    side="BUY" if r.direction == "LONG" else "SELL",
+                    snr=r.snr,
+                    drift_pct=r.drift_pct,
+                ))
+            else:
+                await _post_opportunity(r)
             _mark_alerted(r.label, r.direction)
             posted += 1
     logger.info(
-        "opportunity_scanner: %d/%d above %.2fσ, %d alerts posted",
+        "opportunity_scanner: %d/%d above %.2fσ, %d %s",
         sum(1 for r in rows if abs(r.snr) >= cfg["threshold"]),
         len(rows),
         cfg["threshold"],
         posted,
+        "queued in digest" if digest_on else "alerts posted",
     )
     return posted
 
