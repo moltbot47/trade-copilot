@@ -13,10 +13,20 @@ streak exceeds a threshold. Currently watches:
 
 Each alert is rate-limited via a per-stream cooldown so a sustained
 outage produces ONE alert + a recovery message, not a flood.
+
+DISABLED BY DEFAULT (2026-05-13). The synthetic-streak alerts were
+firing constantly because the BarFetcher token expires every ~30 min
+and falls back to synthetic on every tick until it refreshes, which
+in turn produces a sustained streak that re-alerts every 10 min per
+symbol. Operator asked to remove this noise from the signals channel.
+
+Streak tracking still happens in-process so we can re-enable if needed.
+Set ``HEALTH_ALERTS_ENABLED=1`` to turn Discord posts back on.
 """
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -28,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 SYNTHETIC_STREAK_THRESHOLD = 5
 ALERT_COOLDOWN_SECONDS = 600.0  # 10 minutes between alerts on the same stream
+_ALERTS_ENABLED = os.getenv("HEALTH_ALERTS_ENABLED", "0") == "1"
 
 
 @dataclass
@@ -93,7 +104,14 @@ def get_alerter() -> HealthAlerter:
 
 async def _post_alert(message: str) -> bool:
     """Send the alert message to the configured Discord webhook.
-    Returns True on success. Best-effort; logs warnings on failure."""
+    Returns True on success. Best-effort; logs warnings on failure.
+
+    Returns early without posting if HEALTH_ALERTS_ENABLED is not set —
+    streak tracking still happens in-process; only the Discord side
+    is muted.
+    """
+    if not _ALERTS_ENABLED:
+        return False
     from app.integrations.discord_signals import _webhook_url
 
     url = _webhook_url()
