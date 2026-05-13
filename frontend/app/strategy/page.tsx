@@ -269,20 +269,16 @@ export default function StrategyPage() {
     const userEmails = email ? [email] : [];
     setCommandInFlight(true);
     try {
-      let next: StrategyState;
-      if (ws.status === "open") {
-        next = await ws.command<StrategyState>("strategy.start", {
-          bot_id: botId,
-          timeframe,
-          symbols: DEFAULT_SYMBOLS,
-          user_emails: userEmails,
-        });
-      } else {
-        next = await api.startStrategy(botId, timeframe, DEFAULT_SYMBOLS, userEmails);
-      }
+      // Always use HTTP for Start. The WS command path requires an
+      // authenticated WS connection, but the WS protocol expects an
+      // explicit `auth` frame with a token — the frontend doesn't pass
+      // one, so `user_id` on the server side stays None and the command
+      // times out silently (the UI just hangs on "still starting").
+      // Until WS cookie-auth-on-upgrade is implemented server-side,
+      // route start/stop through HTTP so they always work.
+      const next = await api.startStrategy(botId, timeframe, DEFAULT_SYMBOLS, userEmails);
       setState(next);
       setError(null);
-      // The WS strategy channel will push the next snapshot — no manual refresh needed.
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -293,15 +289,8 @@ export default function StrategyPage() {
   const handleStop = async () => {
     setCommandInFlight(true);
     try {
-      let next: StrategyState;
-      if (ws.status === "open") {
-        next = await ws.command<StrategyState>("strategy.stop", {
-          bot_id: botId,
-          timeframe,
-        });
-      } else {
-        next = await api.stopStrategy(botId, timeframe);
-      }
+      // See handleStart — Stop also uses HTTP until WS auth is fixed.
+      const next = await api.stopStrategy(botId, timeframe);
       setState(next);
       setError(null);
     } catch (err) {
