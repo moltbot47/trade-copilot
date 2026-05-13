@@ -99,6 +99,60 @@ _COLORS["skip_existing_position"] = 0x546E7A
 _COLORS["skip_position_cap"] = 0x546E7A
 
 
+# Contract size (instrument units per 1 lot) for Genesis FX / TradeLocker.
+# Used to translate "0.01 lot" into a dollar risk/reward in the Discord
+# embed so the reader can decide whether to mirror the trade by hand.
+# Calibrated 2026-05-12 against poppad's live ETH trades (avg loss
+# move $2.33 × 10 ETH × 0.01 lot ≈ $0.23 broker P&L → matches the
+# "$0.30" he was seeing including spread).
+_CONTRACT_SIZE_PER_LOT: dict[str, float] = {
+    # FX majors — standard 100k base-currency lot
+    "EURUSD": 100_000.0,
+    "GBPUSD": 100_000.0,
+    "USDJPY": 100_000.0,
+    "AUDUSD": 100_000.0,
+    "NZDUSD": 100_000.0,
+    "USDCAD": 100_000.0,
+    "USDCHF": 100_000.0,
+    "GBPJPY": 100_000.0,
+    "EURGBP": 100_000.0,
+    "EURJPY": 100_000.0,
+    # Crypto — varies. Verified ETH=10 from poppad's account
+    "BTCUSD": 1.0,
+    "ETHUSD": 10.0,
+    "SOLUSD": 10.0,
+    "LTCUSD": 10.0,
+    # US indices — CFD contracts
+    "SP500": 10.0,
+    "NAS100": 1.0,
+    "US30": 1.0,
+    # International indices
+    "DE40": 1.0,
+    "AU200": 1.0,
+    "FTSE100": 1.0,
+    # Metals
+    "XAUUSD": 100.0,   # 100 oz per lot
+    "XAGUSD": 5000.0,  # 5000 oz per lot
+    # Commodities
+    "WTI": 1000.0,
+}
+
+
+def _estimate_hold_minutes(timeframe: str, n_predict: int = 12) -> int | None:
+    """Crude estimate of how long the trade should resolve in.
+
+    The LaT-PFN forecast horizon is ``n_predict`` bars. On a 1m
+    timeframe, that's a 12-minute window; on 5m it's 60 minutes. The SL
+    or TP may fire much sooner — this is the outer expectation, not a
+    promise. Returns None for unknown timeframes.
+    """
+    minutes_per_bar = {"1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240}
+    mpb = minutes_per_bar.get(timeframe.lower())
+    if mpb is None:
+        return None
+    return mpb * int(n_predict)
+
+
 def _webhook_url(user_id: int | None = None) -> str | None:
     """Return the webhook URL for a given user, falling back to the global env.
 
@@ -298,8 +352,45 @@ async def post_decision(
                 fields.append(
                     {"name": "R:R", "value": f"{rr:.2f} : 1", "inline": True}
                 )
+
+                # Dollar risk / reward at the smallest tradeable lot (0.01).
+                # Lets the reader skim "if I take this manually at 0.01,
+                # I'm risking $0.30 to make $0.60." Contract size is per
+                # Genesis FX / TradeLocker conventions.
+                contract = _CONTRACT_SIZE_PER_LOT.get(symbol.upper())
+                if contract is not None:
+                    risk_usd = sl_dist * contract * 0.01
+                    reward_usd = tp_dist * contract * 0.01
+                    fields.append(
+                        {
+                            "name": "Risk @ 0.01 lot",
+                            "value": f"-${risk_usd:.2f}",
+                            "inline": True,
+                        }
+                    )
+                    fields.append(
+                        {
+                            "name": "Reward @ 0.01 lot",
+                            "value": f"+${reward_usd:.2f}",
+                            "inline": True,
+                        }
+                    )
         except (TypeError, ValueError):
             pass
+
+    # Estimated hold window — based on the LaT-PFN forecast horizon
+    # (n_predict bars × timeframe seconds). Bounded estimate, not a
+    # promise. SL/TP may fire much sooner; this is "expect a decision
+    # within this window".
+    hold_minutes = _estimate_hold_minutes(timeframe)
+    if hold_minutes is not None:
+        fields.append(
+            {
+                "name": "Est. hold",
+                "value": f"~{hold_minutes} min (forecast horizon)",
+                "inline": True,
+            }
+        )
 
     # ---- Forecast diagnostics (analysis context) ----------------------------
     if forecast_confidence is not None:
