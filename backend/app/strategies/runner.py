@@ -45,6 +45,17 @@ from app.strategies.trade_manager import CohortCommand, TradeManager
 logger = logging.getLogger(__name__)
 
 
+def _pos_has_sl(p: dict) -> bool:
+    """TradeLocker positions expose `stopLossId`/`takeProfitId` (IDs of
+    internal child orders), NOT `stopLoss`/`takeProfit`. A non-empty ID
+    means the broker is holding a real stop/limit on our behalf."""
+    return bool(p.get("stopLossId"))
+
+
+def _pos_has_tp(p: dict) -> bool:
+    return bool(p.get("takeProfitId"))
+
+
 def _ws_publish(channel: str, user_id: int, payload: dict) -> None:
     """Best-effort WS event-bus publish; never raise back into runner.
 
@@ -1709,14 +1720,108 @@ class QuantRunner:
                 tp=cohort.initial_take_profit,
             )
             order_id = str(order.get("order_id") or "")
-            positions = await client.get_positions(
-                account_id, token, user.tradelocker_acc_num or "1"
-            )
-            pos_id = None
-            for p in reversed(positions):
-                if str(p.get("side")).lower() == cohort.side.lower():
-                    pos_id = str(p.get("id"))
-                    break
+            # We must find the new broker position AND verify its SL/TP
+            # attached before persisting the leg. Without this verify,
+            # a silent-drop on the scale-in order leaves a naked live
+            # position — and on a tiny account that's account-ending
+            # if the broker's stop-out doesn't fire fast enough.
+            existing_pos_ids = {
+                str(leg.tradelocker_position_id)
+                for leg in cohort.legs
+                if leg.tradelocker_position_id
+            }
+            new_pos: dict | None = None
+            for attempt in range(3):
+                try:
+                    positions = await client.get_positions(
+                        account_id, token, user.tradelocker_acc_num or "1"
+                    )
+                    # New position = matches cohort side AND isn't a leg
+                    # we already track. reversed() so the newest match wins.
+                    new_pos = next(
+                        (
+                            p for p in reversed(positions)
+                            if str(p.get("side")).lower() == cohort.side.lower()
+                            and str(p.get("id")) not in existing_pos_ids
+                        ),
+                        None,
+                    )
+                    if new_pos is not None:
+                        break
+                except Exception as exc:
+                    logger.warning(
+                        "scale-in position lookup attempt %d failed: %s",
+                        attempt + 1, exc,
+                    )
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+            if new_pos is None:
+                logger.error(
+                    "scale-in cohort=%s order=%s: new position not found after 3 tries — "
+                    "broker state unknown; refusing to persist leg",
+                    cohort.id, order_id,
+                )
+                raise RuntimeError(
+                    f"scale-in for cohort {cohort.id} could not locate the new position"
+                )
+
+            pos_id = str(new_pos.get("id"))
+
+            # Verify SL/TP attached. If either is missing, repair via
+            # modify_position + reverify; close defensively if repair
+            # fails. Mirrors the hardening on the entry path.
+            needs_sl = not _pos_has_sl(new_pos)
+            needs_tp = not _pos_has_tp(new_pos)
+            if needs_sl or needs_tp:
+                logger.warning(
+                    "scale-in pos %s missing levels (sl=%s tp=%s) — repairing",
+                    pos_id, needs_sl, needs_tp,
+                )
+                try:
+                    await client.modify_position(
+                        pos_id,
+                        token=token,
+                        acc_num=user.tradelocker_acc_num or "1",
+                        stop_loss=cmd.new_stop if needs_sl else None,
+                        take_profit=cohort.initial_take_profit if needs_tp else None,
+                    )
+                    await asyncio.sleep(0.6)
+                    fresh = await client.get_positions(
+                        account_id, token, user.tradelocker_acc_num or "1",
+                    )
+                    confirmed = next(
+                        (p for p in fresh if str(p.get("id")) == pos_id),
+                        None,
+                    )
+                except Exception as exc:
+                    logger.error("scale-in SL/TP repair raised: %s", exc)
+                    confirmed = None
+
+                still_missing = (
+                    confirmed is None
+                    or (needs_sl and not _pos_has_sl(confirmed))
+                    or (needs_tp and not _pos_has_tp(confirmed))
+                )
+                if still_missing:
+                    logger.error(
+                        "scale-in pos %s could not be protected — closing defensively",
+                        pos_id,
+                    )
+                    try:
+                        await client.close_position(
+                            pos_id,
+                            token=token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                        )
+                    except Exception as exc2:
+                        logger.exception(
+                            "emergency close of unprotected scale-in pos=%s: %s",
+                            pos_id, exc2,
+                        )
+                    raise RuntimeError(
+                        f"scale-in pos {pos_id} unprotected — closed defensively"
+                    )
+
             tm.add_scale_in_leg(
                 cohort,
                 entry_price=current_price,

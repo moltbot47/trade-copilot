@@ -505,10 +505,14 @@ class TradeManager:
                 kind="exit_all", cohort_id=cohort.id, reason="drawdown_breach"
             )
 
+        # signed_drift is also used by the scale-in confirmation guard below,
+        # so it must be computed regardless of whether the reversal check
+        # actually runs.
+        signed_drift = forecast_drift if cohort.side == "buy" else -forecast_drift
+
         # 1d. Forecast reversal — gated off by default (see module top).
         # Trades exit via broker-attached SL/TP, not via the runner's market.
         if FORECAST_REVERSAL_ENABLED:
-            signed_drift = forecast_drift if cohort.side == "buy" else -forecast_drift
             if (
                 forecast_confidence > FORECAST_REVERSE_THRESHOLD
                 and signed_drift < 0
