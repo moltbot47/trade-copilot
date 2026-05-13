@@ -109,12 +109,31 @@ class ScanRow:
 
 # ----- Yahoo fetch + forecast — both sync; we wrap in to_thread ----------
 
-def _fetch_closes_sync(ticker: str) -> list[float] | None:
-    """Run yfinance's blocking download in a worker thread."""
+_PERIOD_FOR_INTERVAL: dict[str, str] = {
+    # yfinance constraints: intraday intervals have shorter max periods.
+    # We need ~240 bars; pick the smallest period that yields enough.
+    "1m": "7d",
+    "5m": "30d",
+    "15m": "5d",   # 240 × 15m = 60h ≈ 2.5d; 5d is comfy
+    "30m": "10d",
+    "1h": "60d",
+    "1d": "2y",
+}
+
+
+def _fetch_closes_sync(ticker: str, *, interval: str = "1h") -> list[float] | None:
+    """Run yfinance's blocking download in a worker thread.
+
+    interval: yfinance bar size (e.g. "1h" for the daily scanner,
+    "15m" for the swing scanner). The matching ``period`` is chosen
+    from ``_PERIOD_FOR_INTERVAL`` so we get >= 240 bars without
+    hitting yfinance's interval/period constraints.
+    """
     try:
         import yfinance as yf  # local import keeps cold-start cheap
+        period = _PERIOD_FOR_INTERVAL.get(interval, "60d")
         df = yf.download(
-            ticker, period="60d", interval="1h",
+            ticker, period=period, interval=interval,
             progress=False, auto_adjust=False,
         )
         if df is None or df.empty:
@@ -147,9 +166,9 @@ def _forecast_sync(closes: list[float]) -> dict | None:
         return None
 
 
-async def _scan_one(label: str, ticker: str) -> ScanRow | None:
+async def _scan_one(label: str, ticker: str, *, interval: str = "1h") -> ScanRow | None:
     """Fetch + forecast for one instrument concurrently."""
-    closes = await asyncio.to_thread(_fetch_closes_sync, ticker)
+    closes = await asyncio.to_thread(_fetch_closes_sync, ticker, interval=interval)
     if not closes:
         return None
     fc = await asyncio.to_thread(_forecast_sync, closes)
@@ -185,8 +204,12 @@ async def run_scan(
     instruments: list[tuple[str, str]] | None = None,
     *,
     timeout_s: float = 25.0,
+    interval: str = "1h",
 ) -> list[ScanRow]:
     """Run the LaT-PFN scan across `instruments` concurrently.
+
+    interval: yfinance bar size. Default "1h" → 12-bar horizon = ~12h
+    (daily-swing scanner). Use "15m" for the 15-30 minute swing scanner.
 
     Returns rows ranked by |drift/σ| descending (strongest signal first).
     Failures are silently dropped — the scan returns whatever succeeds
@@ -198,7 +221,10 @@ async def run_scan(
         return []
 
     started = time.monotonic()
-    tasks = [asyncio.create_task(_scan_one(label, ticker)) for ticker, label in targets]
+    tasks = [
+        asyncio.create_task(_scan_one(label, ticker, interval=interval))
+        for ticker, label in targets
+    ]
     try:
         done = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=timeout_s)
     except asyncio.TimeoutError:

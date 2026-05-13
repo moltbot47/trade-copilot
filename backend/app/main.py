@@ -434,6 +434,12 @@ async def lifespan(_: FastAPI):
     from app.integrations.opportunity_scanner import opportunity_scanner_task
     scanner_task = _aio.create_task(opportunity_scanner_task())
 
+    # Swing-trade scanner — sibling of the daily-swing opportunity_scanner,
+    # but runs on 15m bars with a 3-hour forecast horizon. Targets 15-30
+    # minute hold candidates. No-op unless SWING_SCAN_ENABLED=1.
+    from app.integrations.swing_scanner import swing_scanner_task
+    swing_task = _aio.create_task(swing_scanner_task())
+
     # Auto-resume runners that were running before the last shutdown.
     try:
         await _auto_resume_runners()
@@ -453,7 +459,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        for task in (refresh_task, reconcile_task, summary_task, scanner_task):
+        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task):
             task.cancel()
             try:
                 await task
