@@ -51,22 +51,33 @@ _COUNTER_TTL_SECONDS = 30.0
 _DISCORD_WEBHOOK_ENV_NAMES = ("DISCORD_SIGNALS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 DISCORD_WEBHOOK_ENV = _DISCORD_WEBHOOK_ENV_NAMES[0]  # canonical (kept for backwards-compat imports)
 
-# Decision allowlist — these post to Discord. Includes skip_below_threshold
-# so every scan with a confidence score lands in the channel — useful for
-# watching the bot "think" in real time even when it doesn't fire.
-HIGH_SIGNAL_DECISIONS = frozenset(
+# Decision allowlist — these post to Discord. By default, ONLY actual
+# trade events (entry/exit/scale). The `skip_*` decisions used to post
+# too (one per skipped symbol per tick), which generated ~8 Discord
+# posts per 5-min cycle on a typical account — too noisy. They're
+# opt-in via DISCORD_NOISE_ALERTS=1 if you want the bot's "thinking"
+# stream in the channel for debugging.
+_NOISE_ALERTS_ON = os.getenv("DISCORD_NOISE_ALERTS", "0") == "1"
+_TRADE_DECISIONS = frozenset(
     {
         "entry_buy",
         "entry_sell",
         "scale_in",
         "partial_close",
         "hard_exit",
+    }
+)
+_SKIP_DECISIONS = frozenset(
+    {
         "skip_kill_switch",
         "skip_exhaustion_filter",
-        "skip_below_threshold",   # confidence-bearing scan
-        "skip_existing_position", # confidence-bearing scan blocked by exposure
-        "skip_position_cap",      # confidence-bearing scan blocked by cap
+        "skip_below_threshold",
+        "skip_existing_position",
+        "skip_position_cap",
     }
+)
+HIGH_SIGNAL_DECISIONS = (
+    _TRADE_DECISIONS | _SKIP_DECISIONS if _NOISE_ALERTS_ON else _TRADE_DECISIONS
 )
 
 # Color palette per decision (Discord embed `color` is decimal RGB).
