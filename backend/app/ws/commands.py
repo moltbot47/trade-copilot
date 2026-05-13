@@ -47,15 +47,30 @@ async def handle_strategy_start(user: User, params: dict[str, Any], db: Session)
     bot = db.get(Bot, bot_id)
     if bot is None:
         return False, _err("not_found", "bot not found")
-    if bot.strategy_type != StrategyType.latpfn_momentum:
-        return False, _err("validation", "this strategy runner only supports latpfn_momentum bots")
+    # Dispatch on strategy type — mirrors the HTTP /api/strategy/start route.
+    # Previously the WS handler only accepted latpfn_momentum, which silently
+    # rejected every Start click on a latpfn-quant bot.
+    if bot.strategy_type not in (
+        StrategyType.latpfn_momentum,
+        StrategyType.latpfn_quant,
+    ):
+        return False, _err(
+            "validation",
+            f"strategy {bot.strategy_type.value} cannot be started via WS "
+            "(TradingView-webhook driven)",
+        )
 
     # Lazy import — keeps the module import-cheap and avoids any circulars
     # with the strategies package.
-    from app.strategies.runner import StrategyRunner
+    from app.strategies.runner import QuantRunner, StrategyRunner
+
+    runner_cls = (
+        StrategyRunner if bot.strategy_type == StrategyType.latpfn_momentum
+        else QuantRunner
+    )
 
     try:
-        runner = await StrategyRunner.start(
+        runner = await runner_cls.start(
             db_session_factory=SessionLocal,
             bot_id=bot_id,
             timeframe=timeframe,
