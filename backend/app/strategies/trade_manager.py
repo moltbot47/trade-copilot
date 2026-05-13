@@ -20,6 +20,7 @@ runner translates into TradeLocker API calls. This keeps testing easy
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
@@ -86,6 +87,13 @@ DRAWDOWN_ATR_LIMIT = 1.5           # tightened: cohort avg DD > 1.5×ATR → exi
 SCALE_IN_MAX_LEGS = 3              # entry + 2 scale-ins (hard cap)
 FORECAST_REVERSE_THRESHOLD = 1.0   # opposite-direction forecast > 1.0σ → exit
                                    # (was 1.5; more responsive to flips)
+# 2026-05-12: forecast-reversal exits are off by default on small accounts.
+# The market-exit fired faster than broker SL/TP could trigger and ate spread
+# every flip-flop on noisy 1m bars (verified on 16 ETH round-trips for poppad
+# — 0 closed via SL/TP, 100% via runner market-exit, avg cost ~$0.30/trade).
+# Re-enable by setting env ENABLE_FORECAST_REVERSAL=1 if you want the model
+# to babysit live trades again.
+FORECAST_REVERSAL_ENABLED = os.getenv("ENABLE_FORECAST_REVERSAL", "0") == "1"
 
 # Trailing-ratchet tuning (Wave 5B).
 RATCHET_TRIGGER_R = 1.5            # ratchet activates only after price reaches >= 1.5R
@@ -497,15 +505,17 @@ class TradeManager:
                 kind="exit_all", cohort_id=cohort.id, reason="drawdown_breach"
             )
 
-        # 1d. Forecast reversal
-        signed_drift = forecast_drift if cohort.side == "buy" else -forecast_drift
-        if (
-            forecast_confidence > FORECAST_REVERSE_THRESHOLD
-            and signed_drift < 0
-        ):
-            return CohortCommand(
-                kind="exit_all", cohort_id=cohort.id, reason="forecast_reversed"
-            )
+        # 1d. Forecast reversal — gated off by default (see module top).
+        # Trades exit via broker-attached SL/TP, not via the runner's market.
+        if FORECAST_REVERSAL_ENABLED:
+            signed_drift = forecast_drift if cohort.side == "buy" else -forecast_drift
+            if (
+                forecast_confidence > FORECAST_REVERSE_THRESHOLD
+                and signed_drift < 0
+            ):
+                return CohortCommand(
+                    kind="exit_all", cohort_id=cohort.id, reason="forecast_reversed"
+                )
 
         # 1e. Break-even shift (NEW for tiny-account scalping). Once price
         # moves +BREAKEVEN_R_THRESHOLD favorable, immediately move SL to the
