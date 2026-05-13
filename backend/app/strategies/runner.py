@@ -336,6 +336,32 @@ class StrategyRunner:
                 token = decrypt(user.tradelocker_token) if user.tradelocker_token else None
                 if not token or not user.tradelocker_account_id:
                     continue
+
+                # find user's subscription for this bot (aggression + per-user
+                # instrument filter). Mirrors the QuantRunner Step-0 check —
+                # if the subscription names an explicit instrument list, the
+                # signal's symbol must be in it or we skip this user silently.
+                aggression = 5
+                sub_for_user = None
+                for sub in user.subscriptions:
+                    if sub.bot_id == self.bot_id and not sub.is_paused:
+                        sub_for_user = sub
+                        aggression = sub.aggression_level
+                        break
+
+                if sub_for_user and sub_for_user.allowed_instruments:
+                    allowed_set = {
+                        s.strip().upper()
+                        for s in sub_for_user.allowed_instruments.split(",")
+                        if s.strip()
+                    }
+                    if sig.symbol.upper() not in allowed_set:
+                        logger.debug(
+                            "momentum: skip user=%s symbol=%s (not in allowed %s)",
+                            user.id, sig.symbol, sorted(allowed_set),
+                        )
+                        continue
+
                 try:
                     state: Any = await client.get_account_state(
                         user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
@@ -344,13 +370,6 @@ class StrategyRunner:
                 except TradeLockerError as exc:
                     logger.info("balance lookup failed user=%s: %s", user.id, exc)
                     balance = 10_000.0
-
-                # find user's subscription aggression for this bot
-                aggression = 5
-                for sub in user.subscriptions:
-                    if sub.bot_id == self.bot_id and not sub.is_paused:
-                        aggression = sub.aggression_level
-                        break
 
                 lot = compute_user_lot(
                     base_lot=sig.qty,
@@ -1017,7 +1036,7 @@ class QuantRunner:
         account_id: str,
         token: str,
         acc_num: str,
-    ) -> tuple[int, dict[int, list[dict]]]:
+    ) -> tuple[int, dict[int, list[dict]]] | None:
         """Live broker position count + per-instrument grouping.
 
         SOURCE OF TRUTH for the position cap. Counts what's actually
@@ -1025,13 +1044,20 @@ class QuantRunner:
         between 1m/5m runners and catches manual broker positions.
 
         Returns:
-          (total_count, positions_by_tradable_id)
+          (total_count, positions_by_tradable_id) on success.
+          None on broker-fetch failure — caller MUST skip the entry
+          (fail-closed). The previous (0, {}) sentinel let the cap check
+          pass during 429 / token-expiry spikes and could open an extra
+          position on top of an already-full account.
         """
         try:
             positions = await client.get_positions(account_id, token, acc_num)
         except Exception as exc:
-            logger.warning("broker position count failed: %s — assuming 0", exc)
-            return 0, {}
+            logger.warning(
+                "broker position count failed: %s — skipping entry decision this tick",
+                exc,
+            )
+            return None
         by_id: dict[int, list[dict]] = {}
         for p in positions:
             tid = int(p.get("tradableInstrumentId") or 0)
@@ -1221,12 +1247,26 @@ class QuantRunner:
 
                             # ---- Step 3: Broker truth ONE fetch for both
                             # position cap + exposure check ----
-                            broker_total, by_tid = await self._count_broker_positions(
+                            broker_state = await self._count_broker_positions(
                                 client,
                                 user.tradelocker_account_id,
                                 token,
                                 user.tradelocker_acc_num or "1",
                             )
+                            if broker_state is None:
+                                # Fail-closed: we don't know the true position
+                                # count, so refuse to open another. Better to
+                                # miss one entry than to over-leverage.
+                                self._log_tick(
+                                    symbol, "skip_kill_switch",
+                                    current_price=current_price,
+                                    forecast_view=forecast_view,
+                                    threshold=threshold,
+                                    reason="broker position count failed — fail-closed",
+                                    user_id=user.id,
+                                )
+                                continue
+                            broker_total, by_tid = broker_state
 
                             cap = int(user.max_concurrent_positions or 0)
                             if cap > 0 and broker_total >= cap:
@@ -1905,7 +1945,15 @@ class QuantRunner:
         elif cmd.kind == "modify_sl":
             if cmd.new_stop is None:
                 return
-            tm.update_stop(cohort, cmd.new_stop)
+            # Walk each open leg and call modify_position. We do NOT touch
+            # the DB current_stop until at least one broker leg confirms
+            # the new level — otherwise a broker failure leaves the DB
+            # believing the trail moved while the broker SL is still at
+            # the old level → evaluate() sees the trade as favorable and
+            # never re-issues the move. Better behavior: keep the DB in
+            # sync with the broker's view, even if it lags by a tick.
+            confirmed_legs = 0
+            failed_legs = 0
             for leg in cohort.legs:
                 if leg.is_open and leg.role in ("entry", "scale_in") and leg.tradelocker_position_id:
                     try:
@@ -1915,8 +1963,26 @@ class QuantRunner:
                             acc_num=user.tradelocker_acc_num or "1",
                             stop_loss=cmd.new_stop,
                         )
+                        leg.stop_loss = float(cmd.new_stop)
+                        confirmed_legs += 1
                     except Exception as exc:
+                        failed_legs += 1
                         logger.warning("trail SL failed leg=%s: %s", leg.id, exc)
+            if confirmed_legs > 0:
+                tm.update_stop(cohort, cmd.new_stop)
+                if failed_legs > 0:
+                    logger.warning(
+                        "modify_sl on cohort %s: %d legs OK, %d failed — "
+                        "DB stop updated, but %d leg(s) still at old broker SL "
+                        "(next tick will retry)",
+                        cohort.id, confirmed_legs, failed_legs, failed_legs,
+                    )
+            else:
+                logger.error(
+                    "modify_sl on cohort %s: ALL %d legs failed — DB stop NOT updated, "
+                    "next evaluate() will re-issue",
+                    cohort.id, failed_legs,
+                )
 
         elif cmd.kind == "exit_all":
             for leg in cohort.legs:
