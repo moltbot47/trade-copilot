@@ -166,11 +166,98 @@ def _forecast_sync(closes: list[float]) -> dict | None:
         return None
 
 
-async def _scan_one(label: str, ticker: str, *, interval: str = "1h") -> ScanRow | None:
-    """Fetch + forecast for one instrument concurrently."""
-    closes = await asyncio.to_thread(_fetch_closes_sync, ticker, interval=interval)
-    if not closes:
-        return None
+async def _get_system_broker_fetcher():
+    """Build a BarFetcher using the first user with a working broker
+    connection. Used by scanners to fetch real-time broker bars
+    instead of yfinance's delayed feed. Returns None if no user has a
+    usable token.
+
+    The "system" user is just whoever's available — we're not trading
+    on their account, just reading bars. Token gets auto-refreshed and
+    persisted on first 401.
+    """
+    from sqlalchemy import select
+    from app.core.crypto import decrypt, encrypt
+    from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
+    from app.db.database import SessionLocal
+    from app.db.models import User
+    from app.strategies.data_feed import BarFetcher
+
+    client = TradeLockerClient(env="live")
+    db = SessionLocal()
+    try:
+        users = db.scalars(select(User).where(User.tradelocker_token.isnot(None))).all()
+        for user in users:
+            try:
+                token = decrypt(user.tradelocker_token)
+                # Light touch — just verify the token works before returning the fetcher.
+                await client.get_account_state(
+                    user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
+                )
+                logger.info("scan: using broker bars via user=%s", user.email)
+                return BarFetcher(
+                    client=client,
+                    account_id=user.tradelocker_account_id,
+                    token=token,
+                    acc_num=user.tradelocker_acc_num or "1",
+                )
+            except TradeLockerError as e:
+                if "401" in str(e) and user.tradelocker_refresh_token:
+                    try:
+                        rt = decrypt(user.tradelocker_refresh_token)
+                        fresh = await client.refresh_access_token(rt)
+                        new_token = fresh["access_token"]
+                        u = db.get(User, user.id)
+                        u.tradelocker_token = encrypt(new_token)
+                        db.commit()
+                        logger.info("scan: refreshed token for user=%s, using broker bars", user.email)
+                        return BarFetcher(
+                            client=client,
+                            account_id=user.tradelocker_account_id,
+                            token=new_token,
+                            acc_num=user.tradelocker_acc_num or "1",
+                        )
+                    except Exception as exc:
+                        logger.warning("scan: token refresh failed for %s: %s", user.email, exc)
+                        continue
+                continue
+            except Exception as exc:
+                logger.warning("scan: probe failed for %s: %s", user.email, exc)
+                continue
+    finally:
+        db.close()
+    logger.warning("scan: no user with working broker connection — falling back to yfinance")
+    return None
+
+
+async def _scan_one(
+    label: str, ticker: str, *, interval: str = "1h", fetcher=None
+) -> ScanRow | None:
+    """Fetch + forecast for one instrument concurrently.
+
+    If `fetcher` is provided (a BarFetcher), bars come from the broker
+    in real-time. Otherwise falls back to yfinance (delayed feed).
+    """
+    if fetcher is not None:
+        # Broker bars (real-time)
+        try:
+            # Request more than 240 so we can trim to exactly 240 after dropna
+            bars = await fetcher.fetch_bars(label, timeframe=interval, count=320)
+            if bars is None or len(bars) < 240:
+                return None
+            if bool(getattr(bars, "attrs", {}).get("synthetic")):
+                return None
+            closes = bars["close"].dropna().tolist()[-240:]
+            if len(closes) < 240:
+                return None
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("scan: broker fetch failed for %s: %s", label, exc)
+            return None
+    else:
+        # yfinance fallback (delayed)
+        closes = await asyncio.to_thread(_fetch_closes_sync, ticker, interval=interval)
+        if not closes:
+            return None
     fc = await asyncio.to_thread(_forecast_sync, closes)
     if not fc:
         return None
@@ -205,16 +292,28 @@ async def run_scan(
     *,
     timeout_s: float = 25.0,
     interval: str = "1h",
+    use_broker_bars: bool = True,
 ) -> list[ScanRow]:
     """Run the LaT-PFN scan across `instruments` concurrently.
 
-    interval: yfinance bar size. Default "1h" → 12-bar horizon = ~12h
-    (daily-swing scanner). Use "15m" for the 15-30 minute swing scanner.
+    interval: bar size. Default "1h" → 12-bar horizon = ~12h.
+    use_broker_bars: when True (default 2026-05-14), fetch bars from
+        TradeLocker via BarFetcher — real-time, accurate. When False or
+        no broker user available, falls back to yfinance (delayed).
+        The runner has always used broker bars; bringing scanners in
+        line eliminates the stale-price problem that was showing wrong
+        entry prices in the digest (GBPUSD 1.35914 vs broker 1.35047).
 
     Returns rows ranked by |drift/σ| descending (strongest signal first).
     Failures are silently dropped — the scan returns whatever succeeds
     within the timeout budget.
     """
+    fetcher = None
+    if use_broker_bars:
+        try:
+            fetcher = await _get_system_broker_fetcher()
+        except Exception as exc:
+            logger.warning("scan: broker fetcher init failed: %s; falling back to yfinance", exc)
     targets = instruments or DEFAULT_INSTRUMENTS
     if not _latpfn_url():
         logger.info("scan: LATPFN_ENDPOINT_URL not configured; returning empty")
@@ -222,7 +321,7 @@ async def run_scan(
 
     started = time.monotonic()
     tasks = [
-        asyncio.create_task(_scan_one(label, ticker, interval=interval))
+        asyncio.create_task(_scan_one(label, ticker, interval=interval, fetcher=fetcher))
         for ticker, label in targets
     ]
     try:
