@@ -162,6 +162,7 @@ async def _one_pass() -> int:
     a single combined embed every DIGEST_INTERVAL_S. Otherwise we fall
     back to direct per-symbol posts (legacy behavior).
     """
+    from app.integrations.discord_signals import _CONTRACT_SIZE_PER_LOT
     from app.integrations.latpfn_scan import EXPANDED_INSTRUMENTS, run_scan
     from app.integrations.signal_digest import DigestRow, enqueue_signal, is_enabled
 
@@ -176,12 +177,42 @@ async def _one_pass() -> int:
             threshold=cfg["threshold"], cooldown_s=cfg["cooldown_s"],
         ):
             if digest_on:
+                # Compute entry/SL/TP from the forecast — same approach
+                # as swing_scanner, but with horizon_std (forecast spread)
+                # as the SL distance. Operator asked 2026-05-14 to make
+                # the digest match the scan-report format with full
+                # levels per candidate.
+                entry_p = float(r.current)
+                horizon = float(r.horizon_mean)
+                std = float(r.horizon_std) if r.horizon_std > 0 else None
+                tp_p = sl_p = rr = risk_u = reward_u = None
+                if std is not None and std > 0:
+                    if r.direction == "LONG":
+                        tp_p = horizon
+                        sl_p = entry_p - std
+                    else:
+                        tp_p = horizon
+                        sl_p = entry_p + std
+                    tp_dist = abs(tp_p - entry_p)
+                    sl_dist = abs(entry_p - sl_p)
+                    if sl_dist > 0:
+                        rr = tp_dist / sl_dist
+                        contract = _CONTRACT_SIZE_PER_LOT.get(r.label.upper())
+                        if contract is not None:
+                            risk_u = sl_dist * contract * 0.01
+                            reward_u = tp_dist * contract * 0.01
                 await enqueue_signal(DigestRow(
                     source="DAILY",
                     symbol=r.label,
                     side="BUY" if r.direction == "LONG" else "SELL",
                     snr=r.snr,
                     drift_pct=r.drift_pct,
+                    entry=entry_p,
+                    tp=tp_p,
+                    sl=sl_p,
+                    rr=rr,
+                    risk_usd_001=risk_u,
+                    reward_usd_001=reward_u,
                 ))
             else:
                 await _post_opportunity(r)

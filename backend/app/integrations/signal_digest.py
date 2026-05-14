@@ -60,7 +60,11 @@ _queue_lock = asyncio.Lock()
 
 def _config() -> dict[str, Any]:
     return {
-        "interval_s": float(os.getenv("DIGEST_INTERVAL_S", "600")),
+        # Default 1800 = 30 min. Operator requested less-frequent posts
+        # 2026-05-14 (was 600 = 10 min). Lower frequency reduces
+        # notification fatigue; signals stay actionable within a 30-min
+        # window for most timeframes.
+        "interval_s": float(os.getenv("DIGEST_INTERVAL_S", "1800")),
         "enabled": os.getenv("DIGEST_ENABLED", "1") == "1",
     }
 
@@ -103,52 +107,58 @@ async def _flush_now() -> int:
         logger.info("digest: %d signals dropped (no webhook configured)", len(rows))
         return 0
 
-    # Compose a monospace table inside a code block. Discord renders
-    # ``` code ``` in a fixed-width font — perfect for column alignment.
-    # Columns: SRC SYMBOL SIDE σ R:R $RISK $REW
-    header = f"{'SRC':<6}{'SYMBOL':<10}{'SIDE':<5}{'σ':>7}{'R:R':>7}{'$RISK':>9}{'$REW':>9}"
-    sep = "─" * len(header)
-    lines = [header, sep]
-    bull_count = 0
-    bear_count = 0
-    for r in rows:
-        if r.snr > 0:
-            bull_count += 1
-        else:
-            bear_count += 1
-        rr_s = f"{r.rr:.2f}" if r.rr is not None else "—"
-        risk_s = f"-${r.risk_usd_001:.2f}" if r.risk_usd_001 is not None else "—"
-        reward_s = f"+${r.reward_usd_001:.2f}" if r.reward_usd_001 is not None else "—"
-        lines.append(
-            f"{r.source:<6}{r.symbol:<10}{r.side:<5}"
-            f"{r.snr:>+6.2f} {rr_s:>6} {risk_s:>8} {reward_s:>8}"
-        )
+    # Per-signal embed fields with full entry/SL/TP — matches the scan-
+    # report format. Discord embeds cap at 25 fields and 6000 chars, so
+    # we cap at 15 signals per digest. Sort by abs(snr) desc so strongest
+    # signals show first.
+    rows_sorted = sorted(rows, key=lambda x: abs(x.snr), reverse=True)[:15]
+    bull_count = sum(1 for r in rows if r.snr > 0)
+    bear_count = sum(1 for r in rows if r.snr < 0)
 
-    body = "```\n" + "\n".join(lines) + "\n```"
+    fields: list[dict[str, Any]] = []
+    for r in rows_sorted:
+        emoji = "🟢" if r.snr > 0 else "🔴"
+        side = r.side.upper()
+        sigma_abs = abs(r.snr)
+
+        # Build the value block conditionally — DAILY rows may have
+        # entry/sl/tp populated now (post-2026-05-14 update); rows that
+        # still don't have them fall back to a compact summary.
+        value_lines = []
+        if r.entry is not None:
+            value_lines.append(f"**Entry** `{r.entry:.5f}`")
+        if r.sl is not None and r.entry is not None:
+            sl_pct = (r.sl - r.entry) / r.entry * 100
+            sl_dollar = f" · risk **-${r.risk_usd_001:.2f}**" if r.risk_usd_001 is not None else ""
+            value_lines.append(f"**SL** `{r.sl:.5f}` ({sl_pct:+.2f}%){sl_dollar}")
+        if r.tp is not None and r.entry is not None:
+            tp_pct = (r.tp - r.entry) / r.entry * 100
+            tp_dollar = f" · reward **+${r.reward_usd_001:.2f}**" if r.reward_usd_001 is not None else ""
+            value_lines.append(f"**TP** `{r.tp:.5f}` ({tp_pct:+.2f}%){tp_dollar}")
+        rr_str = f"{r.rr:.2f}:1" if r.rr is not None else "—"
+        drift_str = f"drift {r.drift_pct:+.2f}%" if r.drift_pct is not None else ""
+        value_lines.append(f"R:R **{rr_str}** · {drift_str} · src `{r.source}`")
+        value = "\n".join(value_lines)
+
+        fields.append({
+            "name": f"{emoji} {r.symbol} {side} · {sigma_abs:.2f}σ",
+            "value": value,
+            "inline": False,
+        })
 
     by_source: dict[str, int] = {}
     for r in rows:
         by_source[r.source] = by_source.get(r.source, 0) + 1
     breakdown = ", ".join(f"{n} {s}" for s, n in by_source.items())
+    overflow_note = f" · top 15 of {len(rows)}" if len(rows) > 15 else ""
 
     embed = {
         "title": f"📊 Signals digest · {len(rows)} candidates",
-        "description": f"`{breakdown}` · last digest window",
+        "description": f"`{breakdown}`{overflow_note} · 🟢 {bull_count} long · 🔴 {bear_count} short",
         "color": 0x42A5F5,
-        "fields": [
-            {
-                "name": "Candidates",
-                "value": body,
-                "inline": False,
-            },
-            {
-                "name": "Summary",
-                "value": f"🟢 {bull_count} long · 🔴 {bear_count} short",
-                "inline": True,
-            },
-        ],
+        "fields": fields,
         "footer": {
-            "text": "informational only · runners trade their own configs on their own cadence",
+            "text": "informational · entry/SL/TP at 0.01 lot · runners trade their own configs",
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
