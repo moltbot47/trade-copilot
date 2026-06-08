@@ -12,10 +12,13 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
+    accounts,
     auth,
     bots,
     calculator,
     dashboard,
+    dom,
+    isolation,
     mfa,
     subscriptions,
     tradelocker,
@@ -138,6 +141,15 @@ def _apply_lightweight_migrations() -> None:
         # Alembic 0003. NOT NULL with default for new rows; lightweight
         # ALTER applies NOT NULL via the DEFAULT clause on SQLite.
         ("users", "risk_appetite", "VARCHAR(16) DEFAULT 'balanced'"),
+        # Isolation harness: attribute a closed trade to its dedicated
+        # demo account. Mirrored as Alembic 0004. NULL for copy-runner
+        # outcomes so the isolation equity curve filters cleanly.
+        ("trade_outcomes", "strategy_account_id", "INTEGER DEFAULT NULL"),
+        # DOM delegation: tag every audit event with the TradingAccount it
+        # affected. Mirrored as Alembic 0005. Without this, DOM endpoints
+        # crash at audit-commit on pre-Alembic live DBs that were stamped
+        # straight to head without running 0005.
+        ("audit_log", "account_id", "INTEGER DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
@@ -235,17 +247,20 @@ def _apply_lightweight_migrations() -> None:
 
 
 async def _periodic_token_refresh_task() -> None:
-    """Background task: refresh all TradeLocker tokens every 6 hours.
+    """Background task: refresh all TradeLocker tokens every 30 minutes.
 
-    Removes the daily reconnect requirement that previously surfaced as
-    401s on the runner. Failures (e.g. user has no refresh_token, or
-    refresh endpoint rejects) are logged but do not raise — the user
-    simply has to reconnect via the UI. Runs forever; cancelled on shutdown.
+    TradeLocker access tokens typically expire in 15-60 min. A 6h refresh
+    cycle (previous value) left a multi-hour window where every broker call
+    401'd. 30 min keeps tokens fresh ahead of expiry. Failures (no refresh
+    token, refresh endpoint rejects) are logged but do not raise — affected
+    users must reconnect via UI. Runs forever; cancelled on shutdown.
+
+    Cost is negligible: one HTTP call per connected user every 30 min.
     """
     import asyncio as _aio
     from app.core.tradelocker_token_refresh import proactive_refresh_all
 
-    interval_seconds = 6 * 3600
+    interval_seconds = 30 * 60
     while True:
         try:
             summary = await proactive_refresh_all()
@@ -545,7 +560,10 @@ app.include_router(subscriptions.router, prefix="/api")
 app.include_router(tradelocker.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(strategy_api.router, prefix="/api")
+app.include_router(isolation.router, prefix="/api")
 app.include_router(calculator.router, prefix="/api")
+app.include_router(dom.router, prefix="/api")
+app.include_router(accounts.router, prefix="/api")
 
 # WebSocket endpoint — protocol uses /ws (no /api prefix per WS_PROTOCOL.md).
 app.include_router(ws_router)

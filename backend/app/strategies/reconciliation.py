@@ -26,8 +26,8 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from app.core.tradelocker_auth import call_with_refresh
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
-from app.core.crypto import decrypt
 from app.db.database import SessionLocal
 from app.db.models import Cohort, CohortStatus, User
 
@@ -63,18 +63,20 @@ async def reconcile_user(user_id: int) -> dict:
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
-        if user is None or not user.tradelocker_token or not user.tradelocker_account_id:
-            return summary
-        token = decrypt(user.tradelocker_token)
-        if not token:
+        if user is None:
             return summary
 
-        client = TradeLockerClient(env=user.tradelocker_env or "demo")
+        async def _get_positions(s: dict) -> list[dict]:
+            client = TradeLockerClient(env=s["env"])
+            return await client.get_positions(
+                s["account_id"], s["token"], s["acc_num"]
+            )
 
         try:
-            broker_positions = await client.get_positions(
-                user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
-            )
+            broker_positions = await call_with_refresh(user_id, _get_positions, db=db)
+        except ValueError:
+            # no_session — user hasn't connected TL yet
+            return summary
         except TradeLockerError as exc:
             logger.info("reconciliation skipped for user=%s: %s", user_id, exc)
             summary["errors"] = 1
@@ -138,54 +140,27 @@ async def reconcile_user(user_id: int) -> dict:
             pid = str(pos.get("id"))
             if pid not in all_tracked_ids:
                 summary["untracked_positions"] += 1
-                # NEW 2026-05-11: When we find an orphan position with no
-                # SL or TP attached, defensively attach safety levels right
-                # here. This catches the failure mode where the runner
-                # placed an order but crashed before its own modify_position
-                # repair fired — leaving an uncovered position on a live
-                # account, which is the worst possible state.
+                # HARD RULE 2026-05-20: reconciliation MUST NEVER call
+                # modify_position on an untracked position. "Untracked"
+                # means "the bot did not initiate it" — by definition that
+                # makes it the USER's manual trade. Touching user-owned
+                # trades is what caused the cmercer / poppad incident
+                # where day-trading positions were silently slapped with
+                # 0.5%-adverse stops and closed negative on noise.
+                #
+                # We still LOG + ALERT so operators see drift, but the
+                # only place SL/TP gets set is the runner's own post-
+                # place_order repair path (which is gated by a Cohort/
+                # CohortLeg row that proves bot ownership). The earlier
+                # "auto-protect" feature was removed in full.
                 has_sl = bool(pos.get("stopLossId"))
                 has_tp = bool(pos.get("takeProfitId"))
-                unprotected = not (has_sl and has_tp)
-                if unprotected:
-                    summary.setdefault("auto_protected", 0)
-                    avg = float(pos.get("avgPrice") or 0)
-                    side = (pos.get("side") or "").lower()
-                    if avg > 0 and side in ("buy", "sell"):
-                        # Conservative defaults: SL 0.5% adverse, TP 0.8% favorable.
-                        # Side-aware. These are emergency-protect levels, not
-                        # the strategy's optimal — we want to STOP the bleed,
-                        # not maximize edge. The runner manages real levels
-                        # on positions it owns; this branch is for orphans.
-                        if side == "buy":
-                            sl_px = round(avg * (1 - 0.005), 4)
-                            tp_px = round(avg * (1 + 0.008), 4)
-                        else:
-                            sl_px = round(avg * (1 + 0.005), 4)
-                            tp_px = round(avg * (1 - 0.008), 4)
-                        try:
-                            await client.modify_position(
-                                position_id=pid,
-                                token=token,
-                                acc_num=user.tradelocker_acc_num or "1",
-                                stop_loss=sl_px if not has_sl else None,
-                                take_profit=tp_px if not has_tp else None,
-                            )
-                            summary["auto_protected"] += 1
-                            logger.warning(
-                                "AUTO-PROTECTED orphan position user=%s pos=%s side=%s "
-                                "avg=%.4f → sl=%.4f tp=%.4f",
-                                user_id, pid, side, avg, sl_px, tp_px,
-                            )
-                        except Exception as exc:  # noqa: BLE001
-                            logger.warning(
-                                "AUTO-PROTECT FAILED for orphan pos=%s: %s — operator must close manually",
-                                pid, exc,
-                            )
                 key = _alert_key("untracked", pid)
                 if _should_alert(key):
                     logger.warning(
-                        "UNTRACKED BROKER POSITION: user=%s pos=%s side=%s qty=%s tid=%s has_sl=%s has_tp=%s",
+                        "UNTRACKED BROKER POSITION (manual / non-bot): user=%s "
+                        "pos=%s side=%s qty=%s tid=%s has_sl=%s has_tp=%s — "
+                        "bot will NOT manage or modify",
                         user_id, pid,
                         pos.get("side"), pos.get("qty"),
                         pos.get("tradableInstrumentId"),
@@ -196,16 +171,12 @@ async def reconcile_user(user_id: int) -> dict:
                         import httpx
                         url = _webhook_url()
                         if url:
-                            protect_note = (
-                                " · auto-protected with conservative SL/TP"
-                                if unprotected else ""
-                            )
                             msg = (
-                                f"⚠️ UNTRACKED BROKER POSITION: user_id={user_id} "
+                                f"ℹ️ UNTRACKED BROKER POSITION: user_id={user_id} "
                                 f"pos={pid} side={pos.get('side')} qty={pos.get('qty')} "
-                                f"has_sl={has_sl} has_tp={has_tp}{protect_note}. "
-                                f"Bot is NOT managing this position (manual trade or "
-                                f"crashed-after-place_order)."
+                                f"has_sl={has_sl} has_tp={has_tp}. "
+                                f"Bot is NOT managing this position (manual trade "
+                                f"or placed-before-runner-tracked). No action taken."
                             )
                             async with httpx.AsyncClient(timeout=5.0) as c:
                                 await c.post(url, json={"content": msg})

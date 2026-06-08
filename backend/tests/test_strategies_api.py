@@ -4,6 +4,34 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from app.core.crypto import encrypt
+from app.db.models import User
+
+
+def _ensure_connected_user(db_session, email: str = "t@example.com") -> User:
+    """Seed a User row with a valid-looking TL connection.
+
+    The /strategy/start endpoint pre-validates each user's TL session.
+    Tests that use a placeholder user_email must seed the row first AND
+    mock validate_user_tl_session — otherwise the endpoint correctly
+    refuses to start.
+    """
+    user = db_session.query(User).filter(User.email == email).first()
+    if user is None:
+        user = User(email=email, hashed_password="x")
+        user.tradelocker_account_id = "ACC-1"
+        user.tradelocker_acc_num = "1"
+        user.tradelocker_env = "demo"
+        user.tradelocker_token = encrypt("fake-access-token")
+        db_session.add(user)
+        db_session.commit()
+    return user
+
+
+async def _always_valid_session(_user_id):
+    """Mock for validate_user_tl_session — pretend the session is healthy."""
+    return True, "ok"
+
 
 def test_status_unknown_bot_returns_empty_state(client, seed_bots):
     """The recent fix — /status should return 200 + structured empty state, not 404."""
@@ -83,7 +111,8 @@ def test_start_validates_user_emails_required(client, seed_bots):
     assert res.status_code == 400
 
 
-def test_start_launches_runner_with_mock(client, seed_bots):
+def test_start_launches_runner_with_mock(client, seed_bots, db_session):
+    _ensure_connected_user(db_session)
     latpfn = next(b for b in seed_bots if b.slug == "latpfn-momentum")
     fake_task = SimpleNamespace(done=lambda: False)
     fake_runner = SimpleNamespace(
@@ -96,6 +125,8 @@ def test_start_launches_runner_with_mock(client, seed_bots):
     with patch(
         "app.strategies.api.StrategyRunner.start",
         new=AsyncMock(return_value=fake_runner),
+    ), patch(
+        "app.strategies.api.validate_user_tl_session", new=_always_valid_session
     ):
         res = client.post(
             "/api/strategy/start",
@@ -113,8 +144,9 @@ def test_start_launches_runner_with_mock(client, seed_bots):
     assert body["runner_type"] == "SimpleNamespace"  # mocked instance class
 
 
-def test_start_dispatches_quant_bot_to_quant_runner(client, seed_bots):
+def test_start_dispatches_quant_bot_to_quant_runner(client, seed_bots, db_session):
     """latpfn_quant bot id must be routed to QuantRunner.start, NOT StrategyRunner."""
+    _ensure_connected_user(db_session)
     quant = next(b for b in seed_bots if b.slug == "latpfn-quant")
     fake_task = SimpleNamespace(done=lambda: False)
     fake_runner = SimpleNamespace(
@@ -128,6 +160,8 @@ def test_start_dispatches_quant_bot_to_quant_runner(client, seed_bots):
     quant_mock = AsyncMock(return_value=fake_runner)
     with patch("app.strategies.api.StrategyRunner.start", new=momentum_mock), patch(
         "app.strategies.api.QuantRunner.start", new=quant_mock
+    ), patch(
+        "app.strategies.api.validate_user_tl_session", new=_always_valid_session
     ):
         res = client.post(
             "/api/strategy/start",
@@ -146,8 +180,9 @@ def test_start_dispatches_quant_bot_to_quant_runner(client, seed_bots):
     assert body["bot_id"] == quant.id
 
 
-def test_start_dispatches_momentum_bot_to_strategy_runner(client, seed_bots):
+def test_start_dispatches_momentum_bot_to_strategy_runner(client, seed_bots, db_session):
     """latpfn_momentum must hit StrategyRunner, not QuantRunner."""
+    _ensure_connected_user(db_session)
     momentum = next(b for b in seed_bots if b.slug == "latpfn-momentum")
     fake_task = SimpleNamespace(done=lambda: False)
     fake_runner = SimpleNamespace(
@@ -161,6 +196,8 @@ def test_start_dispatches_momentum_bot_to_strategy_runner(client, seed_bots):
     quant_mock = AsyncMock(return_value=fake_runner)
     with patch("app.strategies.api.StrategyRunner.start", new=momentum_mock), patch(
         "app.strategies.api.QuantRunner.start", new=quant_mock
+    ), patch(
+        "app.strategies.api.validate_user_tl_session", new=_always_valid_session
     ):
         res = client.post(
             "/api/strategy/start",

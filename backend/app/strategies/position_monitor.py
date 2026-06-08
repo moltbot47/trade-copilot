@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.core.crypto import decrypt
+from app.core.tradelocker_auth import call_with_refresh
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
 from app.db.models import Execution, Signal, TradeOutcome, User
 
@@ -65,11 +65,26 @@ def _ws_publish_trade(user_id: int, outcome: "TradeOutcome") -> None:
 class PositionMonitor:
     """Tracks (execution_id → high-water marks) until the position closes."""
 
-    def __init__(self, db_session_factory, client: TradeLockerClient, bot_id: int, timeframe: str) -> None:
+    def __init__(
+        self,
+        db_session_factory,
+        client: TradeLockerClient,
+        bot_id: int,
+        timeframe: str,
+        account_override: Optional[tuple[str, str]] = None,
+        strategy_account_id: Optional[int] = None,
+    ) -> None:
         self.db_session_factory = db_session_factory
         self.client = client
         self.bot_id = bot_id
         self.timeframe = timeframe
+        # Isolation harness only. When set, ALL tracked executions are polled
+        # against this (account_id, acc_num) instead of each owning user's
+        # default account — because the isolation runner trades a dedicated
+        # sub-account that is NOT user.tradelocker_account_id. Leaving this
+        # None preserves the existing multi-user copy behavior exactly.
+        self._account_override = account_override
+        self.strategy_account_id = strategy_account_id
         # execution_id → {"mae": float, "mfe": float, "entry": float, "side": str, "opened_at": datetime}
         self._tracking: dict[int, dict[str, Any]] = {}
 
@@ -111,16 +126,40 @@ class PositionMonitor:
                 user: User | None = db.get(User, user_id)
                 if user is None:
                     continue
-                token = decrypt(user.tradelocker_token) if user.tradelocker_token else None
-                if not token or not user.tradelocker_account_id:
-                    continue
-                try:
-                    positions = await self.client.get_positions(
-                        user.tradelocker_account_id, token, user.tradelocker_acc_num or "1"
-                    )
-                except TradeLockerError as exc:
-                    logger.warning("position poll failed for user=%s: %s", user_id, exc)
-                    continue
+
+                # Account override path skips the auth wrapper because the
+                # caller is supplying explicit account info (used by tests
+                # and the isolation-mode flow). Fall back to call_with_refresh
+                # for the normal per-user case so a stale access token gets
+                # auto-refreshed instead of silently failing the whole poll.
+                if self._account_override is not None:
+                    acct_id, acc_num = self._account_override
+                    from app.core.crypto import decrypt as _decrypt
+                    token = _decrypt(user.tradelocker_token) if user.tradelocker_token else None
+                    if not token or not acct_id:
+                        continue
+                    try:
+                        positions = await self.client.get_positions(
+                            acct_id, token, acc_num
+                        )
+                    except TradeLockerError as exc:
+                        logger.warning("position poll failed for user=%s: %s", user_id, exc)
+                        continue
+                else:
+                    # Reuse self.client (the same instance tests mock) so the
+                    # wrapped op stays compatible with patched .get_positions.
+                    async def _get_positions(s: dict, _client=self.client) -> list[dict]:
+                        return await _client.get_positions(
+                            s["account_id"], s["token"], s["acc_num"]
+                        )
+                    try:
+                        positions = await call_with_refresh(user_id, _get_positions, db=db)
+                    except ValueError:
+                        # User has no TL session — skip silently
+                        continue
+                    except TradeLockerError as exc:
+                        logger.warning("position poll failed for user=%s: %s", user_id, exc)
+                        continue
 
                 # Build a quick lookup: order_id → position
                 open_order_ids = {
@@ -215,6 +254,7 @@ class PositionMonitor:
 
         outcome = TradeOutcome(
             bot_id=self.bot_id,
+            strategy_account_id=self.strategy_account_id,
             signal_id=signal.id,
             instrument=signal.instrument,
             side=side,

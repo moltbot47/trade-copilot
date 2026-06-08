@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.tradelocker_auth import validate_user_tl_session
 from app.db.database import SessionLocal, get_db
 from app.db.models import (
     Bot,
@@ -15,6 +16,7 @@ from app.db.models import (
     StrategyState,
     StrategyType,
     TradeOutcome,
+    User,
 )
 from app.strategies.runner import QuantRunner, StrategyRunner, get_runner
 
@@ -49,6 +51,42 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(400, "symbols list cannot be empty")
     if not req.user_emails:
         raise HTTPException(400, "user_emails list cannot be empty")
+
+    # Reject webhook-driven bot types before doing expensive auth validation —
+    # otherwise a wrong bot_id would needlessly trigger broker probes.
+    if bot.strategy_type not in (StrategyType.latpfn_momentum, StrategyType.latpfn_quant):
+        raise HTTPException(
+            400,
+            f"strategy {bot.strategy_type.value} cannot be started via "
+            "/strategy/start (TradingView-webhook driven)",
+        )
+
+    # Pre-validate every user's TradeLocker session so we fail loudly here
+    # instead of silently spawning a runner that dies on the first 401. The
+    # validator also tries a one-shot refresh, so a merely-expired access
+    # token won't block startup — only a fully dead session (refresh token
+    # also expired, no creds saved) returns failure.
+    invalid: list[tuple[str, str]] = []
+    for email in req.user_emails:
+        user = db.query(User).filter(User.email == email).first()
+        if user is None:
+            invalid.append((email, "user_not_found"))
+            continue
+        ok, reason = await validate_user_tl_session(user.id)
+        if not ok:
+            invalid.append((email, reason))
+    if invalid:
+        raise HTTPException(
+            409,
+            {
+                "error": "tradelocker_session_invalid",
+                "message": (
+                    "Cannot start strategy: one or more users have an invalid "
+                    "TradeLocker session. Please reconnect at /tradelocker/connect."
+                ),
+                "users": [{"email": e, "reason": r} for e, r in invalid],
+            },
+        )
 
     # Optional threshold override — write to StrategyState before runner spawns.
     if req.threshold is not None:
@@ -85,7 +123,7 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
             user_emails=req.user_emails,
             latpfn_endpoint=req.latpfn_endpoint,
         )
-    elif bot.strategy_type == StrategyType.latpfn_quant:
+    else:  # latpfn_quant (the bot-type rejection above already filtered others)
         runner = await QuantRunner.start(
             db_session_factory=SessionLocal,
             bot_id=req.bot_id,
@@ -93,12 +131,6 @@ async def start(req: StartReq, db: Session = Depends(get_db)) -> dict:
             symbols=req.symbols,
             user_emails=req.user_emails,
             latpfn_endpoint=req.latpfn_endpoint,
-        )
-    else:
-        raise HTTPException(
-            400,
-            f"strategy {bot.strategy_type.value} cannot be started via "
-            "/strategy/start (TradingView-webhook driven)",
         )
 
     return {

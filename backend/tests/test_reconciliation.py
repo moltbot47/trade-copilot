@@ -119,6 +119,13 @@ async def test_reconcile_detects_untracked_broker_position(setup, db_session):
 
 @pytest.mark.asyncio
 async def test_reconcile_handles_broker_error(setup, db_session):
+    """On TL error, reconciliation should count the error and continue.
+
+    Note: as of the 401-auto-refresh fix, "unauthorized" triggers a refresh
+    attempt. We patch refresh_user_token to return None (simulating refresh
+    also failed) so the error propagates back to reconcile_user — which is
+    the realistic scenario when both access and refresh tokens are expired.
+    """
     user, bot = setup["user"], setup["bot"]
     _make_cohort(db_session, user, bot)
 
@@ -126,7 +133,12 @@ async def test_reconcile_handles_broker_error(setup, db_session):
         from app.core.tradelocker_client import TradeLockerError
         raise TradeLockerError("unauthorized")
 
-    with patch("app.core.tradelocker_client.TradeLockerClient.get_positions", new=fake_positions):
+    async def no_refresh(uid):
+        return None  # refresh token also expired → propagate
+
+    with patch(
+        "app.core.tradelocker_client.TradeLockerClient.get_positions", new=fake_positions
+    ), patch("app.core.tradelocker_auth.refresh_user_token", new=no_refresh):
         result = await reconcile_user(user.id)
 
     assert result["errors"] == 1
