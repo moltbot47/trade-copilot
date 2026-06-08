@@ -82,7 +82,12 @@ alertcondition(longSig,  title = "ORB Long Signal",  message = "ORB long breakou
 alertcondition(shortSig, title = "ORB Short Signal", message = "ORB short breakout")
 
 // ----------------------------- Webhook payload -------------------------------
-// Two delivery modes — pick ONE for your TradingView alert (see docs/SETUP.md).
+// IMPORTANT — TWO alerts required, ONE PER DIRECTION:
+//   Create one TradingView alert on the "ORB Long Signal" alertcondition and
+//   another on the "ORB Short Signal" alertcondition, each with the matching
+//   body below. Copy-pasting the long body into a short alert (or vice versa)
+//   fires a wrong-side order at the broker (BUY on a SHORT signal). The
+//   `side`, `stop_loss`, and `take_profit` values are all direction-specific.
 //
 // (A) Hardened mode (PREFERRED) — relay signs requests with HMAC-SHA256.
 //     TradingView Pine cannot compute HMAC, so point alerts at the local
@@ -91,26 +96,48 @@ alertcondition(shortSig, title = "ORB Short Signal", message = "ORB short breako
 //       X-Bot-Slug:          orb-breakout
 //       X-Webhook-Timestamp: <unix-seconds>
 //       X-Webhook-Signature: hex(HMAC_SHA256(secret, f"{ts}.{body}"))
-//     Then paste THIS body into the alert Message box (no bot_secret):
 //
+//     LONG alert body (for "ORB Long Signal"):
 //     {
 //       "instrument": "{{ticker}}",
 //       "side": "buy",
 //       "entry_price": {{close}},
-//       "stop_loss": {{strategy.position_avg_price}} - 50,
-//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "stop_loss":  {{close}} - 50,
+//       "take_profit": {{close}} + 75,
+//       "base_lot_size": 0.10
+//     }
+//
+//     SHORT alert body (for "ORB Short Signal"):
+//     {
+//       "instrument": "{{ticker}}",
+//       "side": "sell",
+//       "entry_price": {{close}},
+//       "stop_loss":  {{close}} + 50,
+//       "take_profit": {{close}} - 75,
 //       "base_lot_size": 0.10
 //     }
 //
 // (B) Legacy mode (DEPRECATED — emits server-side warning logs).
-//     Direct TradingView -> /api/webhooks/tradingview, body:
+//     Direct TradingView -> /api/webhooks/tradingview. Same two-template rule:
 //
+//     LONG body:
 //     {
 //       "bot_secret": "orb-breakout",
 //       "instrument": "{{ticker}}",
 //       "side": "buy",
 //       "entry_price": {{close}},
-//       "stop_loss": {{strategy.position_avg_price}} - 50,
-//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "stop_loss":  {{close}} - 50,
+//       "take_profit": {{close}} + 75,
+//       "base_lot_size": 0.10
+//     }
+//
+//     SHORT body:
+//     {
+//       "bot_secret": "orb-breakout",
+//       "instrument": "{{ticker}}",
+//       "side": "sell",
+//       "entry_price": {{close}},
+//       "stop_loss":  {{close}} + 50,
+//       "take_profit": {{close}} - 75,
 //       "base_lot_size": 0.10
 //     }

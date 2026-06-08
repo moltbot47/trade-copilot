@@ -89,6 +89,12 @@ alertcondition(longSig,  title = "Squeeze Long",  message = "Squeeze release lon
 alertcondition(shortSig, title = "Squeeze Short", message = "Squeeze release short")
 
 // ----------------------------- Webhook payload -------------------------------
+// IMPORTANT — TWO alerts required, ONE PER DIRECTION:
+//   Create one TradingView alert on the "Squeeze Long" alertcondition and
+//   another on "Squeeze Short", each with the matching body below.
+//   Copy-pasting the long body into a short alert fires a wrong-side order
+//   at the broker (BUY on a SHORT signal). The `side`, `stop_loss`, and
+//   `take_profit` values are all direction-specific.
 // See docs/SETUP.md "Securing your TradingView webhooks" for the full guide.
 //
 // (A) Hardened mode (PREFERRED) — point alerts at a signing relay; relay
@@ -96,25 +102,48 @@ alertcondition(shortSig, title = "Squeeze Short", message = "Squeeze release sho
 //       X-Bot-Slug:          squeeze-momentum
 //       X-Webhook-Timestamp: <unix-seconds>
 //       X-Webhook-Signature: hex(HMAC_SHA256(secret, f"{ts}.{body}"))
-//     Alert message body (no bot_secret needed):
 //
+//     LONG alert body (for "Squeeze Long"):
 //     {
 //       "instrument": "{{ticker}}",
 //       "side": "buy",
 //       "entry_price": {{close}},
-//       "stop_loss": {{strategy.position_avg_price}} - 50,
-//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "stop_loss":  {{close}} - 50,
+//       "take_profit": {{close}} + 75,
 //       "base_lot_size": 0.10
 //     }
 //
-// (B) Legacy mode (DEPRECATED, server emits WARN log per request):
+//     SHORT alert body (for "Squeeze Short"):
+//     {
+//       "instrument": "{{ticker}}",
+//       "side": "sell",
+//       "entry_price": {{close}},
+//       "stop_loss":  {{close}} + 50,
+//       "take_profit": {{close}} - 75,
+//       "base_lot_size": 0.10
+//     }
 //
+// (B) Legacy mode (DEPRECATED, server emits WARN log per request) — same
+//     two-template rule applies; add "bot_secret" to each body:
+//
+//     LONG body:
 //     {
 //       "bot_secret": "squeeze-momentum",
 //       "instrument": "{{ticker}}",
 //       "side": "buy",
 //       "entry_price": {{close}},
-//       "stop_loss": {{strategy.position_avg_price}} - 50,
-//       "take_profit": {{strategy.position_avg_price}} + 75,
+//       "stop_loss":  {{close}} - 50,
+//       "take_profit": {{close}} + 75,
+//       "base_lot_size": 0.10
+//     }
+//
+//     SHORT body:
+//     {
+//       "bot_secret": "squeeze-momentum",
+//       "instrument": "{{ticker}}",
+//       "side": "sell",
+//       "entry_price": {{close}},
+//       "stop_loss":  {{close}} + 50,
+//       "take_profit": {{close}} - 75,
 //       "base_lot_size": 0.10
 //     }
