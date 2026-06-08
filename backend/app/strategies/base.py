@@ -28,6 +28,15 @@ class StrategySignal:
     forecast_confidence: float = 0.0  # |drift| / forecast σ
     threshold: float = 1.5  # confidence threshold at time of signal
 
+    # Audit metadata — required for partner strategies (docs/PARTNER_STRATEGY_SPEC.md).
+    # Defaulted so legacy in-house strategies (latpfn_momentum, latpfn_quant) keep
+    # working without changes. Partner strategies MUST set these so the 2-week
+    # audit pipeline can compare backtest assumptions to live fills objectively.
+    expected_entry_price: float = 0.0    # what the strategy thinks it will fill at
+    hard_stop_distance_pts: float = 0.0  # |entry - stop| in points
+    early_stop_condition: str = ""       # plain-English description of stall exit
+    trailing_stop_distance_pts: float = 0.0  # trailing stop offset from peak
+
     # Free-form bag for downstream consumers / debugging
     extra: dict = field(default_factory=dict)
 
