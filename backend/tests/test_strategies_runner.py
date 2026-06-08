@@ -399,3 +399,55 @@ def test_circuit_breaker_clears_after_cooldown(db_session, seed_bots):
     assert allowed is True
     db_session.refresh(user)
     assert user.circuit_breaker_tripped_at is None
+
+
+# --------------------------------------------------------------------- #
+# Regression: DetachedInstanceError on user.subscriptions in QuantRunner
+# --------------------------------------------------------------------- #
+def test_quant_runner_load_users_returns_attached_subscriptions(
+    db_session, seed_bots
+):
+    """QuantRunner._load_users used to close its session in `finally:`
+    before the caller could touch `user.subscriptions`. Accessing the
+    lazy relationship after detach raised DetachedInstanceError, which
+    crashed the tick every minute.
+
+    selectinload(User.subscriptions) materializes the list before the
+    session closes — so reading subscriptions on the detached User
+    works without lazy loading.
+    """
+    from sqlalchemy.orm import sessionmaker
+    from app.db.models import Subscription
+
+    # Use a REAL session factory whose returned sessions actually close
+    # (the existing _session_factory helper masks the bug because its
+    # wrapper ignores close()). Bind to the same engine so the seeded
+    # bots are visible.
+    TestSession = sessionmaker(
+        bind=db_session.get_bind(), autoflush=False, autocommit=False
+    )
+
+    bot = seed_bots[2]  # latpfn-quant
+    user = User(email="qr-detach@example.com", hashed_password="x")
+    db_session.add(user)
+    db_session.commit()
+    db_session.add(
+        Subscription(user_id=user.id, bot_id=bot.id, aggression_level=5)
+    )
+    db_session.commit()
+
+    runner = QuantRunner(
+        db_session_factory=TestSession,
+        bot_id=bot.id,
+        timeframe="1m",
+        symbols=["BTCUSD"],
+        user_emails=["qr-detach@example.com"],
+    )
+
+    users = runner._load_users()
+    assert len(users) == 1
+    # If subscriptions weren't eagerly loaded this raises
+    # DetachedInstanceError. With selectinload it returns the list.
+    subs = users[0].subscriptions
+    assert len(subs) == 1
+    assert subs[0].bot_id == bot.id

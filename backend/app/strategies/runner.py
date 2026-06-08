@@ -2104,12 +2104,25 @@ class QuantRunner:
         )
 
     def _load_users(self) -> list[User]:
+        """Load users + their bot subscriptions for the tick loop.
+
+        We close our session in `finally`, so the User instances we return
+        are detached. SQLAlchemy will raise DetachedInstanceError on any
+        lazy relationship access (e.g. ``user.subscriptions``). The tick
+        path reads ``user.subscriptions`` to honor the per-user instrument
+        filter, so we eagerly load it with selectinload — that materializes
+        the list before the session closes and the relationship works
+        after detach.
+        """
+        from sqlalchemy.orm import selectinload
+
         if not self.user_emails:
             return []
         db = self.db_session_factory()
         try:
             return (
                 db.query(User)
+                .options(selectinload(User.subscriptions))
                 .filter(User.email.in_(self.user_emails), User.is_active.is_(True))
                 .all()
             )
