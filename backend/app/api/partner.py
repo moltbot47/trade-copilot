@@ -279,6 +279,7 @@ def get_partner_daily_summary(
         resolved.account.owner_user_id,
         day=day_dt,
         strategy_name=strategy_name,
+        account_id=resolved.account.tradelocker_account_id,
         db=db,
     )
     summary["account_id"] = account_id

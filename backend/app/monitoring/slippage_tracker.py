@@ -372,6 +372,7 @@ def compute_daily_summary(
     *,
     day: Optional[datetime] = None,
     strategy_name: Optional[str] = None,
+    account_id: Optional[str] = None,
     db: Optional[Session] = None,
 ) -> dict[str, Any]:
     """Aggregate stats for a single UTC day, scoped to one user (and
@@ -420,6 +421,8 @@ def compute_daily_summary(
         )
         if strategy_name:
             base_filter = and_(base_filter, SlippageRecord.strategy_name == strategy_name)
+        if account_id:
+            base_filter = and_(base_filter, SlippageRecord.account_id == account_id)
 
         records = list(db.scalars(select(SlippageRecord).where(base_filter)).all())
         closed = [r for r in records if r.status == "closed"]

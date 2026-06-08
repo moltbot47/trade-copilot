@@ -461,6 +461,13 @@ async def lifespan(_: FastAPI):
     from app.integrations.signal_digest import digest_flusher_task
     digest_task = _aio.create_task(digest_flusher_task())
 
+    # Partner daily summary — posts a per-grant EOD digest to each partner's
+    # configured webhook (Discord embed or HMAC JSON). Ticks every 60s,
+    # publishes once per UTC day per grant. No-op if no grants have webhook
+    # URLs configured.
+    from app.integrations.partner_daily_summary import partner_daily_summary_task
+    partner_summary_task = _aio.create_task(partner_daily_summary_task())
+
     # Auto-resume runners that were running before the last shutdown.
     try:
         await _auto_resume_runners()
@@ -480,7 +487,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task, digest_task):
+        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task, digest_task, partner_summary_task):
             task.cancel()
             try:
                 await task
