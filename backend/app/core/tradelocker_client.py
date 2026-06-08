@@ -354,6 +354,31 @@ class TradeLockerClient:
             acc_num=acc_num,
         )
 
+    async def get_orders(self, account_id: str, token: str, acc_num: str) -> list[dict]:
+        """GET /trade/accounts/{id}/orders — working (un-filled) orders.
+
+        Same array-of-arrays pattern as positions; the columns are similar
+        but a real config probe is needed for live accounts. For the MVP
+        we return the raw 'orders' list as-is so the caller can still
+        cancel by `id`.
+        """
+        raw = await self._request(
+            "GET",
+            f"/trade/accounts/{account_id}/orders",
+            token=token,
+            acc_num=acc_num,
+        )
+        return raw.get("d", {}).get("orders", []) or []
+
+    async def cancel_order(self, order_id: str, token: str, acc_num: str) -> dict:
+        """DELETE /trade/orders/{id} — cancel a working (un-filled) order."""
+        return await self._request(
+            "DELETE",
+            f"/trade/orders/{order_id}",
+            token=token,
+            acc_num=acc_num,
+        )
+
     async def modify_position(
         self,
         position_id: str,
@@ -386,9 +411,11 @@ class TradeLockerClient:
             acc_num=acc_num,
             json=body,
         )
-        if isinstance(raw, dict) and raw.get("s") and raw["s"] != "ok":
+        # Explicit "ok" required — an empty `s` or missing field is NOT success.
+        # (Previous version used a truthy check which silently accepted {"s": ""}.)
+        if not (isinstance(raw, dict) and raw.get("s") == "ok"):
             raise TradeLockerError(
-                f"modify rejected: {raw.get('errmsg') or raw.get('message') or raw}"
+                f"modify rejected: {raw.get('errmsg') if isinstance(raw, dict) else None or (raw.get('message') if isinstance(raw, dict) else None) or raw}"
             )
         return raw
 
