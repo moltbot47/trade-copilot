@@ -19,6 +19,7 @@ from app.api import (
     dashboard,
     isolation,
     mfa,
+    partner,
     subscriptions,
     tradelocker,
     users,
@@ -562,6 +563,7 @@ app.include_router(strategy_api.router, prefix="/api")
 app.include_router(isolation.router, prefix="/api")
 app.include_router(calculator.router, prefix="/api")
 app.include_router(accounts.router, prefix="/api")
+app.include_router(partner.router, prefix="/api")
 
 # WebSocket endpoint — protocol uses /ws (no /api prefix per WS_PROTOCOL.md).
 app.include_router(ws_router)
