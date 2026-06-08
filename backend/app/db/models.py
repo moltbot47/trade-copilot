@@ -583,3 +583,119 @@ class StrategyTickLog(Base):
     decision: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     extra: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class SlippageRecord(Base):
+    """Per-trade audit record comparing strategy expectation vs live broker
+    fill, written by the slippage tracker at three lifecycle points:
+
+      1. Entry signal emitted by strategy → status=pending, expected_*
+         fields populated, signal_ts captured.
+      2. Broker confirms order ack/fill → actual_entry_price + entry
+         slippage + latency fields populated, status=open.
+      3. Position closes → exit_type + actual_exit_price + exit slippage
+         + P&L fields populated, status=closed.
+
+    This is the foundational table the partner dashboard, the 2-week
+    audit, and the slippage stress test all read from. Backtest assumes
+    a certain entry/exit slippage; this table records what actually
+    happened so the comparison is objective.
+
+    Indexed on (user_id, strategy_name, created_at) for the partner
+    dashboard's per-strategy time-range queries.
+    """
+
+    __tablename__ = "slippage_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Trade identity
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    strategy_name: Mapped[str] = mapped_column(
+        String(64), nullable=False, index=True
+    )
+    # The TradeLocker sub-account the trade was placed on. Not an FK because
+    # this string is broker-side and may not match any local Account row.
+    account_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Optional link back to the local Execution row (when one exists).
+    execution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("executions.id"), nullable=True, index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)  # "buy" | "sell"
+
+    # Status — drives the partner dashboard's "open trades" filter and the
+    # reconciliation diff. Values: "pending" | "open" | "closed" | "rejected".
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending", nullable=False, index=True
+    )
+
+    # Timing (UTC, ISO microsecond precision). bar_close_ts and signal_ts
+    # are required at signal emit; the rest fill in as the lifecycle proceeds.
+    bar_close_ts: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    signal_ts: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    order_submit_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    order_ack_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fill_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Entry — expected fields are set at signal emit; actual_entry_price is
+    # set when the broker confirms the fill.
+    bar_close_price: Mapped[float] = mapped_column(Float, nullable=False)
+    expected_entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    actual_entry_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Signed in points: positive = filled WORSE than expected (long fills
+    # higher, short fills lower than the model predicted).
+    entry_slippage_pts: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Stop / exit expectations published by the strategy at signal time.
+    # Used by the audit to compute where the trade SHOULD have closed and
+    # compare against what actually happened.
+    hard_stop_distance_pts: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    trailing_stop_distance_pts: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    early_stop_condition: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+
+    # Exit — populated when the trade closes.
+    # exit_type values: "hard_stop" | "early_stop" | "trailing" | "manual" |
+    # "take_profit" | "reconciliation_close" (forced by drift detection)
+    exit_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    peak_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_exit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_exit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    exit_slippage_pts: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # P&L — both the backtest-projection P&L (what the strategy SHOULD have
+    # made if its expected fills were honored) and the real P&L the broker
+    # actually delivered. Delta = edge erosion to friction.
+    strategy_pnl_pts: Mapped[float | None] = mapped_column(Float, nullable=True)
+    real_pnl_pts: Mapped[float | None] = mapped_column(Float, nullable=True)
+    slippage_total_pts: Mapped[float | None] = mapped_column(Float, nullable=True)
+    slippage_total_dollars: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Latency (ms from bar_close_ts). Pinpoints where execution time is
+    # being lost — strategy computation, network egress, or broker fill.
+    signal_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    submit_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    broker_ack_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fill_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Raw broker JSON response — the trust anchor. Partner dashboards expose
+    # this verbatim so a developer can independently parse and verify our
+    # computed slippage numbers against the broker's own record.
+    broker_fill_response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    broker_close_response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Free-form metadata published by the strategy (velocity score, RSI
+    # snapshot, whatever the strategy author wants to capture).
+    extra_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+
+    # Bookkeeping
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
