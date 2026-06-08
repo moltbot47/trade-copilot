@@ -226,6 +226,67 @@ class StrategyState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class StrategyAccount(Base):
+    """A dedicated TradeLocker demo account bound to ONE bot/strategy.
+
+    This is the isolation-harness primitive. The user picked:
+      - provisioning: multiple sub-accounts under ONE Genesis FX login
+      - isolation unit: per bot/strategy
+
+    So credentials (token/refresh) live on the owning ``User`` row (shared
+    login, refreshed by the existing token-refresh helper) and this row
+    only pins WHICH sub-account this strategy trades on:
+    ``tradelocker_account_id`` + ``tradelocker_acc_num``.
+
+    Two hard DB guarantees enforce true isolation:
+      - ``uq_strategy_account_bot``: one account per bot (can't double-bind a
+        strategy).
+      - ``uq_strategy_account_tlacct``: one strategy per demo account (two
+        strategies can never share a sub-account, so equity/drawdown/Sharpe
+        never cross-contaminate).
+    """
+
+    __tablename__ = "strategy_accounts"
+    __table_args__ = (
+        UniqueConstraint("bot_id", name="uq_strategy_account_bot"),
+        UniqueConstraint(
+            "tradelocker_account_id", name="uq_strategy_account_tlacct"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        ForeignKey("bots.id"), index=True, nullable=False
+    )
+    # The TradeLocker login that owns this sub-account. Supplies the
+    # access/refresh tokens (shared across all isolation accounts under the
+    # same login per the chosen provisioning model).
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(120), default="")
+
+    # The specific sub-account this strategy trades on.
+    tradelocker_account_id: Mapped[str] = mapped_column(
+        String(64), nullable=False
+    )
+    tradelocker_acc_num: Mapped[str] = mapped_column(String(16), default="1")
+    tradelocker_env: Mapped[str] = mapped_column(String(8), default="demo")
+
+    # Which timeframe this isolated strategy runs at (LaT-PFN/quant bars).
+    timeframe: Mapped[str] = mapped_column(String(8), default="1m")
+
+    # Staggered start: the IsolatedRunner sleeps this many seconds (+ jitter)
+    # before its first tick so N runners don't all hammer the broker on the
+    # same second.
+    start_offset_seconds: Mapped[int] = mapped_column(Integer, default=0)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
+
+
 class TradeOutcome(Base):
     """Closed trade record for the feedback loop."""
 
@@ -233,6 +294,12 @@ class TradeOutcome(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id"), index=True, nullable=False)
+    # Set ONLY by the isolation harness. NULL for copy-runner outcomes, so
+    # the isolation equity curve filters cleanly on this and never mixes in
+    # multi-user copy trades.
+    strategy_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("strategy_accounts.id"), index=True, nullable=True
+    )
     signal_id: Mapped[int | None] = mapped_column(ForeignKey("signals.id"), nullable=True)
     instrument: Mapped[str] = mapped_column(String(32), nullable=False)
     side: Mapped[str] = mapped_column(String(8), nullable=False)
