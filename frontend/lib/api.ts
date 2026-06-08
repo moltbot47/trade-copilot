@@ -253,6 +253,17 @@ export const api = {
     }),
   getAccountState: () =>
     request<AccountState>("/api/tradelocker/account"),
+  // Lightweight probe used by the header session-status pill. Mirrors the
+  // pre-start validator on /strategy/start so the UI shows "expired" before
+  // the user clicks Start and gets a 409.
+  getTradeLockerSessionStatus: () =>
+    request<{
+      status: "ok" | "expired" | "expiring" | "disconnected" | "needs_reauth" | "network_error" | "no_session";
+      connected: boolean;
+      valid: boolean;
+      env: string;
+      account_id?: string | null;
+    }>("/api/tradelocker/session-status"),
   // Open positions with broker-side SL/TP status. Drives the dashboard's
   // "edit SL/TP" modal so the user can fix an unprotected position with
   // one click instead of digging into the broker UI.
@@ -464,6 +475,189 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ paused }),
     }),
+
+  // Accounts (Phase A delegation)
+  listAccounts: () =>
+    request<
+      Array<{
+        id: number;
+        label: string;
+        tradelocker_account_id: string;
+        env: string;
+        role: "owner" | "trader" | "viewer";
+        owner_email: string | null;
+        caps: {
+          max_lot_per_order: number | null;
+          max_daily_loss_usd: number | null;
+          allowed_instruments_csv: string | null;
+        } | null;
+        expires_at?: string | null;
+      }>
+    >("/api/accounts"),
+  registerAccount: (payload: {
+    label: string;
+    tradelocker_account_id?: string;
+    tradelocker_acc_num?: string;
+    tradelocker_env?: "demo" | "live";
+  }) =>
+    request<{ id: number; label: string }>("/api/accounts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deactivateAccount: (accountId: number) =>
+    request<{ status: string }>(`/api/accounts/${accountId}`, {
+      method: "DELETE",
+    }),
+  listGrants: (accountId: number) =>
+    request<
+      Array<{
+        id: number;
+        account_id: number;
+        grantee_email: string;
+        role: string;
+        created_at: string;
+        expires_at: string | null;
+        revoked_at: string | null;
+        max_lot_per_order: number | null;
+        max_daily_loss_usd: number | null;
+        allowed_instruments_csv: string | null;
+      }>
+    >(`/api/accounts/${accountId}/grants`),
+  createGrant: (
+    accountId: number,
+    payload: {
+      grantee_email: string;
+      role: "trader" | "viewer";
+      expires_at?: string | null;
+      max_lot_per_order?: number | null;
+      max_daily_loss_usd?: number | null;
+      allowed_instruments_csv?: string | null;
+    },
+  ) =>
+    request<{ id: number; grantee_email: string }>(
+      `/api/accounts/${accountId}/grants`,
+      { method: "POST", body: JSON.stringify(payload) },
+    ),
+  revokeGrant: (accountId: number, grantId: number) =>
+    request<{ status: string }>(
+      `/api/accounts/${accountId}/grants/${grantId}`,
+      { method: "DELETE" },
+    ),
+  accountAudit: (accountId: number, limit = 100) =>
+    request<
+      Array<{
+        id: number;
+        ts: string;
+        actor_email: string | null;
+        action: string;
+        details: string;
+        client_ip: string | null;
+      }>
+    >(`/api/accounts/${accountId}/audit?limit=${limit}`),
+
+  // DOM (account-scoped — Phase A + B)
+  domState: (accountId: number, instrument: string) =>
+    request<{
+      account_id: number;
+      label: string;
+      env: string;
+      instrument: string;
+      balance: number;
+      equity: number;
+      available_funds: number;
+      open_pnl: number;
+      positions: Array<{
+        id: string | null;
+        side: string;
+        qty: number;
+        avg_price: number;
+        unrealized_pl: number;
+        stop_loss_id: number | null;
+        take_profit_id: number | null;
+        tradable_instrument_id: number | null;
+      }>;
+      working_orders: Array<{ id: string; raw: unknown }>;
+      role: "owner" | "trader" | "viewer";
+      caps: {
+        max_lot_per_order: number | null;
+        max_daily_loss_usd: number | null;
+        allowed_instruments_csv: string | null;
+      } | null;
+      daily_realized_pnl_usd: number;
+    }>(
+      `/api/dom/state?account_id=${accountId}&instrument=${encodeURIComponent(instrument)}`,
+    ),
+  domOrder: (payload: {
+    account_id: number;
+    instrument: string;
+    side: "buy" | "sell";
+    qty: number;
+    order_type?: "market" | "limit" | "stop";
+    limit_price?: number;
+    stop_price?: number;
+    sl?: number;
+    tp?: number;
+    fan_to_followers?: boolean;
+  }) =>
+    request<{
+      signal_id: string;
+      master_order_id: string | null;
+      master_status:
+        | "filled"
+        | "rejected"
+        | "error"
+        | "not_connected"
+        | "blocked";
+      master_error: string | null;
+      followers_dispatched: number;
+      followers_acknowledged: number;
+      elapsed_ms: number;
+    }>("/api/dom/order", {
+      method: "POST",
+      body: JSON.stringify({
+        order_type: "market",
+        fan_to_followers: false,
+        ...payload,
+      }),
+    }),
+  domFlatten: (accountId: number) =>
+    request<{ closed: number; errors: string[]; elapsed_ms: number }>(
+      "/api/dom/flatten",
+      { method: "POST", body: JSON.stringify({ account_id: accountId }) },
+    ),
+  domClosePosition: (accountId: number, positionId: string) =>
+    request<{
+      status: string;
+      position_id: string;
+      realized_pnl_usd: number;
+    }>(
+      `/api/dom/positions/${encodeURIComponent(positionId)}?account_id=${accountId}`,
+      { method: "DELETE" },
+    ),
+  domModifyPosition: (
+    accountId: number,
+    positionId: string,
+    patch: { stop_loss?: number; take_profit?: number },
+  ) =>
+    request<{ status: string; position_id: string }>(
+      `/api/dom/positions/${encodeURIComponent(positionId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ account_id: accountId, ...patch }),
+      },
+    ),
+  domCancelOrder: (accountId: number, orderId: string) =>
+    request<{ status: string; order_id: string }>(
+      `/api/dom/orders/${encodeURIComponent(orderId)}?account_id=${accountId}`,
+      { method: "DELETE" },
+    ),
+  domDailyPnl: (accountId: number) =>
+    request<{
+      account_id: number;
+      today_realized_pnl_usd: number;
+      max_daily_loss_usd: number | null;
+      remaining_loss_room_usd: number | null;
+    }>(`/api/dom/daily-pnl?account_id=${accountId}`),
 };
 
 export { getUserEmail };

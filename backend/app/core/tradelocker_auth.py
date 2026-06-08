@@ -136,11 +136,15 @@ async def call_with_refresh(
             raise
 
 
-async def validate_user_tl_session(user_id: int) -> tuple[bool, str]:
+async def validate_user_tl_session(user_id: int, db=None) -> tuple[bool, str]:
     """Cheap probe to verify the user's TL session works. Refreshes if needed.
 
     Used by /strategy/start to block startup on dead sessions instead of
     silently spawning a runner that dies on the first broker call.
+
+    Pass `db` if you already have a Session (e.g. in a request handler) —
+    we need to read the User row from the same engine, otherwise we'd open
+    a fresh SessionLocal that may point at a different DB in tests.
 
     Returns (is_valid, reason):
       (True,  "ok")               session works (with or without a refresh)
@@ -148,7 +152,7 @@ async def validate_user_tl_session(user_id: int) -> tuple[bool, str]:
       (False, "needs_reauth")     401 and refresh also failed
       (False, "network_error")    connectivity issue, retry later
     """
-    session = load_session(user_id)
+    session = load_session(user_id, db=db)
     if session is None:
         return False, "no_session"
 
@@ -159,7 +163,7 @@ async def validate_user_tl_session(user_id: int) -> tuple[bool, str]:
         return await client.list_all_accounts(s["token"])
 
     try:
-        await call_with_refresh(user_id, _probe)
+        await call_with_refresh(user_id, _probe, db=db)
         return True, "ok"
     except TradeLockerError as exc:
         if _is_auth_error(exc):

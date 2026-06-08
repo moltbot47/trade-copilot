@@ -11,12 +11,66 @@ from app.api.users import get_current_user
 from app.core.crypto import decrypt, encrypt
 from app.core.rate_limit import limiter
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
+from app.core.tradelocker_token_refresh import refresh_user_token
 from app.db.database import get_db
 from app.db.models import User
 from app.schemas import StatusResponse, TradeLockerAccountOut, TradeLockerConnect
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tradelocker", tags=["tradelocker"])
+
+
+def _is_unauthorized(exc: TradeLockerError) -> bool:
+    """The client raises 'unauthorized (401) - token expired or invalid' on
+    401 from TradeLocker. We match on that string rather than introducing a
+    new exception subclass — keeps the client surface unchanged."""
+    return "unauthorized (401)" in str(exc) or "401" in str(exc).split()[:1]
+
+
+async def _broker_call_with_refresh(user: User, fn):
+    """Run ``fn(token)`` against the broker. On 401, transparently refresh
+    the user's access token via the stored refresh token and retry ONCE.
+
+    This is what unblocks a returning user whose access token has aged out
+    but whose refresh token is still valid — they no longer have to re-type
+    their Genesis FX password just to load the account picker.
+
+    Raises HTTPException on terminal failure (502 if the broker is down,
+    401 ``reconnect_required`` if even the refresh fails — at which point
+    the user really does need to /connect again).
+    """
+    token = decrypt(user.tradelocker_token) if user.tradelocker_token else None
+    if not token:
+        raise HTTPException(status_code=400, detail="broker token unreadable")
+    try:
+        return await fn(token)
+    except TradeLockerError as exc:
+        if not _is_unauthorized(exc):
+            logger.info("broker call upstream error: %s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail="Broker is not responding. Try again in a moment.",
+            )
+        # Token expired — try refresh, then retry once.
+        new_token = await refresh_user_token(user.id)
+        if not new_token:
+            logger.info("refresh failed for user=%s; forcing reconnect", user.id)
+            raise HTTPException(
+                status_code=401,
+                detail="reconnect_required",
+            )
+        try:
+            return await fn(new_token)
+        except TradeLockerError as exc2:
+            logger.info("broker call failed even after refresh: %s", exc2)
+            if _is_unauthorized(exc2):
+                raise HTTPException(
+                    status_code=401, detail="reconnect_required"
+                )
+            raise HTTPException(
+                status_code=502,
+                detail="Broker is not responding. Try again in a moment.",
+            )
 
 
 def _connect_key(request: Request) -> str:
@@ -190,6 +244,44 @@ async def connect(
     return StatusResponse(status="connected", detail=user.tradelocker_account_id or "")
 
 
+@router.get("/session-status")
+async def session_status(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Cheap probe of the user's TradeLocker session — for UI status banner.
+
+    Returns one of:
+      disconnected — no token saved; user hasn't connected
+      ok           — session works (with or without a silent refresh)
+      expired      — needs UI re-auth (refresh token also dead)
+      network_error — could not reach broker (transient)
+
+    UI polls this every 60s to surface a "your TL session expired" banner
+    before the user clicks Start Strategy and is rejected by the 409 from
+    /strategy/start. Calls the same validator used by that endpoint so the
+    states stay consistent.
+    """
+    from app.core.tradelocker_auth import validate_user_tl_session
+
+    if not user.tradelocker_token or not user.tradelocker_account_id:
+        return {
+            "status": "disconnected",
+            "connected": False,
+            "valid": False,
+            "env": user.tradelocker_env or "demo",
+        }
+
+    ok, reason = await validate_user_tl_session(user.id, db=db)
+    return {
+        "status": reason if not ok else "ok",
+        "connected": True,
+        "valid": ok,
+        "env": user.tradelocker_env or "demo",
+        "account_id": user.tradelocker_account_id,
+    }
+
+
 @router.get("/account", response_model=TradeLockerAccountOut)
 async def account_state(user: User = Depends(get_current_user)) -> TradeLockerAccountOut:
     if not user.tradelocker_token or not user.tradelocker_account_id:
@@ -337,28 +429,24 @@ async def list_accounts(
 ) -> dict:
     """List every TradeLocker account available to the linked session.
 
-    Uses the user's saved access token (no password round-trip). If the
-    token has expired the broker call returns 401 and the user has to
-    /connect again — same recovery path as everywhere else.
+    Uses the user's saved access token; on 401 (token expired) we
+    transparently refresh via the stored refresh token and retry, so the
+    picker keeps working without a full reconnect. Only when the refresh
+    token is ALSO expired does the user need to /connect again — surfaced
+    as ``401 reconnect_required``.
 
     Response shape mirrors the 409 picker payload from /connect so the
     frontend can reuse the same component.
     """
     if not user.tradelocker_token:
         raise HTTPException(status_code=400, detail="no broker linked")
-    token = decrypt(user.tradelocker_token)
-    if not token:
-        raise HTTPException(status_code=400, detail="broker token unreadable")
 
     client = TradeLockerClient(env=user.tradelocker_env or "demo")
-    try:
-        accounts = await client.list_all_accounts(token)
-    except TradeLockerError as exc:
-        logger.info("list_accounts upstream error: %s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Broker is not responding. Try /connect again to refresh your session.",
-        )
+
+    async def _fetch(token: str):
+        return await client.list_all_accounts(token)
+
+    accounts = await _broker_call_with_refresh(user, _fetch)
 
     current_id = str(user.tradelocker_account_id or "")
     return {
@@ -380,6 +468,27 @@ async def list_accounts(
     }
 
 
+@router.post("/refresh", response_model=StatusResponse)
+async def refresh(
+    user: User = Depends(get_current_user),
+) -> StatusResponse:
+    """Explicit broker-token refresh — the frontend can call this when it
+    detects an expired session (or proactively before loading the picker)
+    so the user never has to retype their Genesis FX password unless the
+    refresh token is also expired.
+
+    Returns 200 ``ok`` on success, 401 ``reconnect_required`` if even the
+    refresh fails (meaning the refresh token has aged out and the user
+    really must POST /connect again with credentials).
+    """
+    if not user.tradelocker_token or not user.tradelocker_refresh_token:
+        raise HTTPException(status_code=400, detail="no broker linked")
+    new_token = await refresh_user_token(user.id)
+    if not new_token:
+        raise HTTPException(status_code=401, detail="reconnect_required")
+    return StatusResponse(status="ok", message="broker session refreshed")
+
+
 @router.post("/switch-account", response_model=StatusResponse)
 async def switch_account(
     payload: dict,
@@ -398,19 +507,13 @@ async def switch_account(
 
     if not user.tradelocker_token:
         raise HTTPException(status_code=400, detail="no broker linked")
-    token = decrypt(user.tradelocker_token)
-    if not token:
-        raise HTTPException(status_code=400, detail="broker token unreadable")
 
     client = TradeLockerClient(env=user.tradelocker_env or "demo")
-    try:
-        accounts = await client.list_all_accounts(token)
-    except TradeLockerError as exc:
-        logger.info("switch_account upstream error: %s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Broker is not responding. Try /connect again to refresh.",
-        )
+
+    async def _fetch(token: str):
+        return await client.list_all_accounts(token)
+
+    accounts = await _broker_call_with_refresh(user, _fetch)
 
     chosen = next((a for a in accounts if str(a.get("id")) == target_account_id), None)
     if chosen is None:

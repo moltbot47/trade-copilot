@@ -111,6 +111,85 @@ def test_account_state_disconnected_returns_connected_false(client, auth_headers
     assert body["env"] in ("demo", "live")
 
 
+def test_session_status_disconnected_when_no_token(client, auth_headers):
+    res = client.get("/api/tradelocker/session-status", headers=auth_headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "disconnected"
+    assert body["connected"] is False
+    assert body["valid"] is False
+    assert body["env"] in ("demo", "live")
+
+
+def test_session_status_ok_after_successful_connect(client, auth_headers):
+    """After a successful /connect, the session-status probe should return ok."""
+    with patch(
+        "app.api.tradelocker.TradeLockerClient.authenticate",
+        new=AsyncMock(return_value=_FAKE_AUTH),
+    ):
+        client.post(
+            "/api/tradelocker/connect",
+            headers=auth_headers,
+            json={
+                "email": "trader@example.com",
+                "password": "secret",
+                "server": "GENFX",
+                "env": "demo",
+            },
+        )
+
+    # The status probe calls list_all_accounts via validate_user_tl_session.
+    with patch(
+        "app.core.tradelocker_client.TradeLockerClient.list_all_accounts",
+        new=AsyncMock(return_value=[{"id": "2163244", "accNum": "4"}]),
+    ):
+        res = client.get("/api/tradelocker/session-status", headers=auth_headers)
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "ok"
+    assert body["connected"] is True
+    assert body["valid"] is True
+    assert body["account_id"] == "2163244"
+
+
+def test_session_status_needs_reauth_when_token_dead(client, auth_headers):
+    """If the access token is expired and refresh also fails, status=needs_reauth."""
+    with patch(
+        "app.api.tradelocker.TradeLockerClient.authenticate",
+        new=AsyncMock(return_value=_FAKE_AUTH),
+    ):
+        client.post(
+            "/api/tradelocker/connect",
+            headers=auth_headers,
+            json={
+                "email": "trader@example.com",
+                "password": "secret",
+                "server": "GENFX",
+                "env": "demo",
+            },
+        )
+
+    async def fake_401(self, _token):
+        from app.core.tradelocker_client import TradeLockerError
+        raise TradeLockerError("unauthorized (401) - token expired or invalid")
+
+    async def no_refresh(_uid):
+        return None  # refresh token also expired
+
+    with patch(
+        "app.core.tradelocker_client.TradeLockerClient.list_all_accounts",
+        new=fake_401,
+    ), patch("app.core.tradelocker_auth.refresh_user_token", new=no_refresh):
+        res = client.get("/api/tradelocker/session-status", headers=auth_headers)
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "needs_reauth"
+    assert body["connected"] is True
+    assert body["valid"] is False
+
+
 def test_account_state_connected_maps_fields(client, auth_headers):
     # First connect
     with patch(
