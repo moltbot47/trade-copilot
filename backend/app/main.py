@@ -468,6 +468,13 @@ async def lifespan(_: FastAPI):
     from app.integrations.partner_daily_summary import partner_daily_summary_task
     partner_summary_task = _aio.create_task(partner_daily_summary_task())
 
+    # Broker statement reconciliation — periodic snapshot of each
+    # TradingAccount's broker truth (balance, positions, orders) plus an
+    # on-demand discrepancy diff against slippage_records. Snapshots
+    # hourly by default; tick every 60s but only pulls accounts due.
+    from app.integrations.broker_reconciliation import broker_reconciliation_task
+    broker_recon_task = _aio.create_task(broker_reconciliation_task())
+
     # Auto-resume runners that were running before the last shutdown.
     try:
         await _auto_resume_runners()
@@ -487,7 +494,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task, digest_task, partner_summary_task):
+        for task in (refresh_task, reconcile_task, summary_task, scanner_task, swing_task, digest_task, partner_summary_task, broker_recon_task):
             task.cancel()
             try:
                 await task

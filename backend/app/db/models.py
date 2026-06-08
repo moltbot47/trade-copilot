@@ -597,6 +597,61 @@ class StrategyTickLog(Base):
     extra: Mapped[str] = mapped_column(Text, default="{}")
 
 
+class BrokerStatement(Base):
+    """Periodic snapshot of broker truth per TradingAccount.
+
+    Immutable. Each row captures the canonical state of an account as the
+    broker reported it at ``pulled_at``: balance, open positions, working
+    orders. Raw JSON is preserved verbatim so partners can recompute any
+    derived metric from the broker's own bytes, plus a sha256 content
+    hash so any subsequent rewrite would be detectable.
+
+    The reconciliation diff endpoint compares these snapshots against our
+    SlippageRecord rows to surface drift (missing close response, ghost
+    positions, P&L mismatches). Snapshots feed the partner dashboard's
+    "broker history" tab and the Task #8 cron's daily reconciliation
+    report.
+    """
+
+    __tablename__ = "broker_statements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    # Optional FK — preserved across TradingAccount deletion so the
+    # historical snapshot remains queryable by broker-side IDs alone.
+    trading_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("trading_accounts.id"), nullable=True, index=True
+    )
+    tradelocker_account_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, index=True
+    )
+    tradelocker_acc_num: Mapped[str] = mapped_column(String(16), nullable=False)
+    tradelocker_env: Mapped[str] = mapped_column(String(8), nullable=False)
+
+    pulled_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
+
+    # Derived totals — convenient for time-series queries without
+    # unpacking the raw JSON on every read.
+    balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    open_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    positions_count: Mapped[int] = mapped_column(Integer, default=0)
+    orders_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Raw broker JSON — the trust anchor.
+    raw_account_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_positions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_orders_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # sha256(state || positions || orders) — any change rehashes differently
+    # so subsequent edits to this row are detectable.
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class SlippageRecord(Base):
     """Per-trade audit record comparing strategy expectation vs live broker
     fill, written by the slippage tracker at three lifecycle points:

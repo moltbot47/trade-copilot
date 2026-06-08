@@ -40,10 +40,12 @@ from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
 from app.db.database import get_db
 from app.db.models import (
     AccountAccessGrant,
+    BrokerStatement,
     SlippageRecord,
     TradingAccount,
     User,
 )
+from app.integrations.broker_reconciliation import compute_discrepancies
 from app.monitoring import slippage_tracker
 
 logger = logging.getLogger(__name__)
@@ -285,6 +287,110 @@ def get_partner_daily_summary(
     summary["account_id"] = account_id
     summary["account_label"] = resolved.account.label
     return summary
+
+
+@router.get("/broker-statements")
+def list_partner_broker_statements(
+    account_id: int = Query(..., description="TradingAccount.id"),
+    limit: int = Query(50, le=200),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Time-series of broker_statements for an accessible account.
+
+    Powers the dashboard's "broker history" tab — a partner can see how
+    balance and position count evolved over the audit window without
+    paging through individual records.
+    """
+    resolved = resolve_account_for_action(db, user, account_id, "view")
+    rows = (
+        db.query(BrokerStatement)
+        .filter(BrokerStatement.trading_account_id == resolved.account.id)
+        .order_by(BrokerStatement.pulled_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "account_id": account_id,
+        "statements": [
+            {
+                "id": r.id,
+                "pulled_at": r.pulled_at.isoformat() + "Z",
+                "balance": r.balance,
+                "equity": r.equity,
+                "open_pnl": r.open_pnl,
+                "positions_count": r.positions_count,
+                "orders_count": r.orders_count,
+                "content_sha256": r.content_sha256,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/broker-statements/{statement_id}")
+def get_partner_broker_statement(
+    statement_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Single broker_statement with the raw broker JSON. The trust anchor
+    — a partner can recompute any derived metric from the broker's own
+    bytes here, and re-hash to verify the snapshot wasn't edited."""
+    snap = db.get(BrokerStatement, statement_id)
+    if snap is None or snap.trading_account_id is None:
+        raise HTTPException(404, "statement not found")
+    # Access check via the linked TradingAccount.
+    ta = db.get(TradingAccount, snap.trading_account_id)
+    if ta is None or not may_view(db, user, ta):
+        raise HTTPException(404, "statement not found")
+    return {
+        "id": snap.id,
+        "trading_account_id": snap.trading_account_id,
+        "tradelocker_account_id": snap.tradelocker_account_id,
+        "env": snap.tradelocker_env,
+        "pulled_at": snap.pulled_at.isoformat() + "Z",
+        "balance": snap.balance,
+        "equity": snap.equity,
+        "open_pnl": snap.open_pnl,
+        "positions_count": snap.positions_count,
+        "orders_count": snap.orders_count,
+        "content_sha256": snap.content_sha256,
+        "raw_account_state": (
+            json.loads(snap.raw_account_state_json)
+            if snap.raw_account_state_json
+            else None
+        ),
+        "raw_positions": (
+            json.loads(snap.raw_positions_json)
+            if snap.raw_positions_json
+            else None
+        ),
+        "raw_orders": (
+            json.loads(snap.raw_orders_json) if snap.raw_orders_json else None
+        ),
+    }
+
+
+@router.get("/broker-statements/{statement_id}/discrepancies")
+def get_partner_broker_statement_discrepancies(
+    statement_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Diff a snapshot against our slippage_records. Surfaces missing
+    close responses, untracked open records, and ghost positions for
+    the partner dashboard's reconciliation panel."""
+    snap = db.get(BrokerStatement, statement_id)
+    if snap is None or snap.trading_account_id is None:
+        raise HTTPException(404, "statement not found")
+    ta = db.get(TradingAccount, snap.trading_account_id)
+    if ta is None or not may_view(db, user, ta):
+        raise HTTPException(404, "statement not found")
+    return {
+        "statement_id": statement_id,
+        "discrepancies": compute_discrepancies(statement_id, db=db),
+    }
 
 
 @router.get("/broker-snapshot/{account_id}")
