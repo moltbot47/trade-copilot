@@ -231,9 +231,9 @@ export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
               role="group"
               aria-label="bot instruments"
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.4rem 0.75rem",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+                gap: "0.5rem 0.75rem",
                 fontSize: "0.85rem",
               }}
             >
@@ -243,11 +243,12 @@ export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
                   <label
                     key={sym}
                     style={{
-                      display: "inline-flex",
+                      display: "flex",
                       alignItems: "center",
-                      gap: "0.35rem",
+                      gap: "0.5rem",
                       cursor: "pointer",
                       userSelect: "none",
+                      minWidth: 0,
                     }}
                   >
                     <input
@@ -255,8 +256,18 @@ export default function SubscribeModal({ bot, onClose, onSuccess }: Props) {
                       checked={checked}
                       onChange={() => toggleInstrument(sym)}
                       aria-label={sym}
+                      style={{ flexShrink: 0, width: "1rem", height: "1rem" }}
                     />
-                    <span className={checked ? "accent" : "dim"}>{sym}</span>
+                    <span
+                      className={checked ? "accent" : "dim"}
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {sym}
+                    </span>
                   </label>
                 );
               })}

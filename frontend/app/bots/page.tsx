@@ -9,6 +9,10 @@ export default function BotsPage() {
   const [bots, setBots] = useState<Bot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // undefined = unknown (still loading or logged out); true/false = resolved.
+  const [brokerConnected, setBrokerConnected] = useState<boolean | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -22,6 +26,18 @@ export default function BotsPage() {
       })
       .finally(() => {
         if (mounted) setLoading(false);
+      });
+    api
+      .me()
+      .then((me) => {
+        if (mounted) setBrokerConnected(Boolean(me.tradelocker_account_id));
+      })
+      .catch(() => {
+        // 401 (not logged in) or network error — treat as not connected so
+        // the "connect broker first" link still shows. The Subscribe button's
+        // own click handler will route logged-out users to /strategy where
+        // the EmailGate prompts them.
+        if (mounted) setBrokerConnected(false);
       });
     return () => {
       mounted = false;
@@ -62,7 +78,7 @@ export default function BotsPage() {
           }}
         >
           {bots.map((b) => (
-            <BotCard key={b.id} bot={b} />
+            <BotCard key={b.id} bot={b} brokerConnected={brokerConnected} />
           ))}
         </div>
       )}

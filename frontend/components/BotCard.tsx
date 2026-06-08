@@ -23,7 +23,13 @@ function RiskBars({ level }: { level: number }) {
   );
 }
 
-export default function BotCard({ bot }: { bot: Bot }) {
+export default function BotCard({
+  bot,
+  brokerConnected,
+}: {
+  bot: Bot;
+  brokerConnected?: boolean;
+}) {
   const winRate = bot.backtest_win_rate ?? 0;
   const profitFactor = bot.backtest_profit_factor ?? 0;
   const instruments = (bot.instruments_csv ?? "")
@@ -61,12 +67,18 @@ export default function BotCard({ bot }: { bot: Bot }) {
           <div>{instruments.join(", ") || "—"}</div>
         </div>
       </div>
-      <SubscribeButton bot={bot} />
+      <SubscribeButton bot={bot} brokerConnected={brokerConnected} />
     </article>
   );
 }
 
-function SubscribeButton({ bot }: { bot: Bot }) {
+function SubscribeButton({
+  bot,
+  brokerConnected,
+}: {
+  bot: Bot;
+  brokerConnected?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   const onClick = () => {
@@ -87,18 +99,27 @@ function SubscribeButton({ bot }: { bot: Bot }) {
       >
         Subscribe
       </button>
-      {/* Quiet escape hatch for users who want to connect Genesis FX first. */}
-      <Link
-        href={`/connect?bot=${encodeURIComponent(bot.slug)}`}
-        className="dim"
-        style={{
-          fontSize: "0.72rem",
-          textDecoration: "underline",
-          marginLeft: "0.6rem",
-        }}
-      >
-        connect broker first
-      </Link>
+      {brokerConnected === false && (
+        <Link
+          href={`/connect?bot=${encodeURIComponent(bot.slug)}`}
+          className="dim"
+          style={{
+            fontSize: "0.72rem",
+            textDecoration: "underline",
+            marginLeft: "0.6rem",
+          }}
+        >
+          connect broker first
+        </Link>
+      )}
+      {brokerConnected === true && (
+        <span
+          className="dim"
+          style={{ fontSize: "0.72rem", marginLeft: "0.6rem" }}
+        >
+          broker connected
+        </span>
+      )}
       {open && (
         <SubscribeModal
           bot={bot}

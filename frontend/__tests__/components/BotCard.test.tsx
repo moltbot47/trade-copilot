@@ -28,17 +28,36 @@ describe("BotCard", () => {
   });
 
   it("renders Subscribe button and connect-broker fallback link with bot slug", () => {
-    render(<BotCard bot={fullBot} />);
-    // Subscribe is now a button that opens the modal (or routes via EmailGate)
+    // brokerConnected=false explicitly triggers the "connect broker first"
+    // escape-hatch link. When the prop is undefined or true the link is
+    // hidden (no broker → encourage connection; broker connected → show
+    // "broker connected" status text instead).
+    render(<BotCard bot={fullBot} brokerConnected={false} />);
     expect(
       screen.getByRole("button", { name: /subscribe/i }),
     ).toBeInTheDocument();
-    // The escape-hatch "connect broker first" link still carries the bot slug
     const connectLink = screen.getByRole("link", { name: /connect broker first/i });
     expect(connectLink).toHaveAttribute(
       "href",
       "/connect?bot=orb-breakout",
     );
+  });
+
+  it("shows 'broker connected' status when brokerConnected=true", () => {
+    render(<BotCard bot={fullBot} brokerConnected={true} />);
+    expect(screen.getByText(/broker connected/i)).toBeInTheDocument();
+    // The escape-hatch link is hidden once broker is connected
+    expect(
+      screen.queryByRole("link", { name: /connect broker first/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides both the connect link and status text when brokerConnected is undefined", () => {
+    render(<BotCard bot={fullBot} />);
+    expect(
+      screen.queryByRole("link", { name: /connect broker first/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/broker connected/i)).not.toBeInTheDocument();
   });
 
   it("renders the risk-level bar with aria-label", () => {
