@@ -57,6 +57,7 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0a", // matches TUI bg → mobile address bar tinted dark
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover", // let safe-area-inset env() values reach the layout on iOS
 };
 
 export default function RootLayout({
