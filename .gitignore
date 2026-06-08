@@ -61,3 +61,7 @@ logs/
 backend/trade_copilot.db
 backend/trade_copilot.db-shm
 backend/trade_copilot.db-wal
+trade_copilot.db
+trade_copilot.db-shm
+trade_copilot.db-wal
+*.sqlite3
