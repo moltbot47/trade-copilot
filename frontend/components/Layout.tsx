@@ -23,11 +23,6 @@ const I = {
       <path d="M14 7h6v6" />
     </svg>
   ),
-  dom: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 6h16M4 10h10M4 14h13M4 18h7" />
-    </svg>
-  ),
   dashboard: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -90,7 +85,6 @@ const I = {
 const NAV: NavItem[] = [
   { href: "/bots", label: "bots", icon: I.bots },
   { href: "/strategy", label: "strategy", icon: I.strategy },
-  { href: "/dom", label: "dom", icon: I.dom },
   { href: "/dashboard", label: "dashboard", icon: I.dashboard },
   { href: "/accounts", label: "accounts", icon: I.accounts },
   { href: "/connect", label: "connect", icon: I.connect },
