@@ -442,6 +442,18 @@ class AccountAccessGrant(Base):
         String(512), nullable=True
     )
 
+    # Partner webhook — every slippage_record lifecycle event (signal, fill,
+    # close, rejected) on accounts the grantee can see is teed to this URL
+    # signed with the grantee's HMAC secret. Lets the partner keep an
+    # independent audit mirror outside our platform (the trust anchor for
+    # profit-share arrangements). NULL on either field = webhook disabled
+    # for this grant. The secret is Fernet-encrypted at rest using the
+    # same key as tradelocker_token.
+    partner_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    partner_webhook_secret_encrypted: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+
 
 class AuditLog(Base):
     """Append-only audit trail for security-sensitive actions.

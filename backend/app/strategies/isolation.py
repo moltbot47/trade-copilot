@@ -45,6 +45,7 @@ from app.db.models import (
     StrategyType,
     User,
 )
+from app.integrations import partner_webhook
 from app.monitoring import slippage_tracker
 from app.strategies.base import StrategySignal
 from app.strategies.data_feed import BarFetcher
@@ -451,6 +452,11 @@ class IsolatedRunner:
             )
             slippage_record_id = None
 
+        # Tee the signal event to any partner webhook(s) configured on
+        # this account. Fire-and-forget — runner never awaits HTTP.
+        if slippage_record_id is not None:
+            partner_webhook.schedule_emit("signal", slippage_record_id)
+
         # clientOrderId doubles as the audit tag (identifies the isolated
         # account) AND the idempotency key. Bucketed to 60s so a transient
         # retry within the same bar can't open a second position.
@@ -491,6 +497,7 @@ class IsolatedRunner:
                     broker_response=order.get("raw") if isinstance(order, dict) else None,
                     execution_id=execution_id,
                 )
+                partner_webhook.schedule_emit("fill", slippage_record_id)
             except Exception as exc:
                 logger.warning(
                     "iso bot=%s slippage_tracker.record_fill failed: %s",

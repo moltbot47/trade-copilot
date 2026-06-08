@@ -327,6 +327,9 @@ class PositionMonitor:
                     peak_price=track.get("peak"),
                     closed_ts=closed_at,
                 )
+                # Fire partner webhook fan-out on close (fire-and-forget).
+                from app.integrations import partner_webhook
+                partner_webhook.schedule_emit("close", slip_id)
             except Exception as exc:
                 logger.warning(
                     "slippage_tracker.finalize_record failed for exec=%s: %s",
