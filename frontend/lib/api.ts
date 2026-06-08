@@ -557,6 +557,159 @@ export const api = {
 
   // DOM (manual order ticket) client methods are parked on feature/dom.
   // When that branch is reattached, restore the dom* methods here.
+
+  // Partner read API — drives the partner dashboard.
+  partnerAccounts: () =>
+    request<{
+      accounts: Array<{
+        id: number;
+        label: string;
+        tradelocker_account_id: string;
+        env: string;
+        role: "owner" | "trader" | "viewer" | string;
+        owner_email: string | null;
+        caps: {
+          max_lot_per_order: number | null;
+          max_daily_loss_usd: number | null;
+          allowed_instruments_csv: string | null;
+        } | null;
+        expires_at?: string | null;
+      }>;
+    }>("/api/partner/accounts"),
+
+  partnerSlippageRecords: (
+    params: {
+      accountId?: number;
+      strategyName?: string;
+      status?: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+    } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (params.accountId !== undefined) qs.set("account_id", String(params.accountId));
+    if (params.strategyName) qs.set("strategy_name", params.strategyName);
+    if (params.status) qs.set("status", params.status);
+    if (params.since) qs.set("since", params.since);
+    if (params.until) qs.set("until", params.until);
+    if (params.limit !== undefined) qs.set("limit", String(params.limit));
+    return request<{
+      records: Array<PartnerSlippageRecord>;
+      since: string;
+      until: string;
+      count: number;
+    }>(`/api/partner/slippage-records?${qs.toString()}`);
+  },
+
+  partnerSlippageRecord: (id: number) =>
+    request<PartnerSlippageRecordFull>(`/api/partner/slippage-records/${id}`),
+
+  partnerDailySummary: (accountId: number, day?: string, strategyName?: string) => {
+    const qs = new URLSearchParams({ account_id: String(accountId) });
+    if (day) qs.set("day", day);
+    if (strategyName) qs.set("strategy_name", strategyName);
+    return request<PartnerDailySummary>(`/api/partner/daily-summary?${qs.toString()}`);
+  },
+
+  partnerBrokerSnapshot: (accountId: number) =>
+    request<{
+      account_id: number;
+      tradelocker_account_id: string;
+      env: string;
+      state: Record<string, unknown>;
+      positions: Array<Record<string, unknown>>;
+    }>(`/api/partner/broker-snapshot/${accountId}`),
+
+  partnerBrokerStatements: (accountId: number, limit = 50) =>
+    request<{
+      account_id: number;
+      statements: Array<{
+        id: number;
+        pulled_at: string;
+        balance: number | null;
+        equity: number | null;
+        open_pnl: number | null;
+        positions_count: number;
+        orders_count: number;
+        content_sha256: string;
+      }>;
+    }>(`/api/partner/broker-statements?account_id=${accountId}&limit=${limit}`),
+
+  partnerBrokerStatementDiscrepancies: (statementId: number) =>
+    request<{
+      statement_id: number;
+      discrepancies: Array<{
+        kind: string;
+        severity: string;
+        slippage_record_id?: number;
+        details: Record<string, unknown>;
+      }>;
+    }>(`/api/partner/broker-statements/${statementId}/discrepancies`),
+};
+
+// Partner API type exports.
+export type PartnerSlippageRecord = {
+  id: number;
+  status: "pending" | "open" | "closed" | "rejected" | string;
+  strategy: string;
+  account_id: string;
+  symbol: string;
+  side: string;
+  bar_close_ts: string | null;
+  signal_ts: string | null;
+  fill_ts: string | null;
+  closed_ts: string | null;
+  expected_entry_price: number;
+  actual_entry_price: number | null;
+  entry_slippage_pts: number | null;
+  exit_type: string | null;
+  actual_exit_price: number | null;
+  exit_slippage_pts: number | null;
+  strategy_pnl_pts: number | null;
+  real_pnl_pts: number | null;
+  slippage_total_pts: number | null;
+  slippage_total_dollars: number | null;
+  total_latency_ms: number | null;
+};
+
+export type PartnerSlippageRecordFull = PartnerSlippageRecord & {
+  bar_close_price: number;
+  hard_stop_distance_pts: number;
+  trailing_stop_distance_pts: number;
+  early_stop_condition: string;
+  expected_exit_price: number | null;
+  peak_price: number | null;
+  signal_latency_ms: number | null;
+  submit_latency_ms: number | null;
+  broker_ack_latency_ms: number | null;
+  fill_latency_ms: number | null;
+  broker_fill_response: Record<string, unknown> | null;
+  broker_close_response: Record<string, unknown> | null;
+  extra: Record<string, unknown>;
+};
+
+export type PartnerDailySummary = {
+  user_id: number;
+  day: string;
+  strategy_name: string | null;
+  signals_emitted: number;
+  signals_rejected: number;
+  trades_closed: number;
+  trades_open: number;
+  strategy_pnl_pts: number;
+  real_pnl_pts: number;
+  edge_erosion_pts: number;
+  edge_erosion_dollars: number;
+  avg_entry_slippage_pts: number;
+  worst_entry_slippage_pts: number;
+  avg_exit_slippage_pts: number | null;
+  worst_exit_slippage_pts: number | null;
+  avg_total_latency_ms: number;
+  p95_total_latency_ms: number;
+  worst_total_latency_ms: number;
+  account_id: number;
+  account_label: string | null;
 };
 
 export { getUserEmail };

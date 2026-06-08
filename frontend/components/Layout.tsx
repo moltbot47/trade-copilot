@@ -87,6 +87,7 @@ const NAV: NavItem[] = [
   { href: "/strategy", label: "strategy", icon: I.strategy },
   { href: "/dashboard", label: "dashboard", icon: I.dashboard },
   { href: "/accounts", label: "accounts", icon: I.accounts },
+  { href: "/partner", label: "audit", icon: I.dashboard },
   { href: "/connect", label: "connect", icon: I.connect },
   { href: "/settings", label: "settings", icon: I.settings },
   { href: "/calculator", label: "calculator", icon: I.calculator },
