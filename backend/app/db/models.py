@@ -278,6 +278,104 @@ class PerformanceSnapshot(Base):
     feedback_action: Mapped[str | None] = mapped_column(String(32), nullable=True)  # tighten|loosen|pause|hold
 
 
+class TradingAccount(Base):
+    """A delegated trading account — one row per broker account that can be
+    traded on behalf of its owner.
+
+    Today the only attached broker is TradeLocker. The credentials
+    (token + refresh) live on the OWNER's user row (one Genesis login per
+    user); this row pins the sub-account id and provides the access-grant
+    surface so an employee can be invited to trade it without sharing the
+    owner's password.
+
+    Why a separate table from User.tradelocker_* fields?
+      - A user can own multiple accounts (main, demo, prop-firm sub).
+      - Access can be granted to other users WITHOUT giving them broker creds.
+      - Audit log records actor (who pressed the button) + account (whose
+        money it was) — impossible if "account" only equals "user".
+    """
+    __tablename__ = "trading_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(120), default="")
+    # Pins which broker sub-account this row represents.
+    tradelocker_account_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    tradelocker_acc_num: Mapped[str] = mapped_column(String(16), default="1")
+    tradelocker_env: Mapped[str] = mapped_column(String(8), default="demo")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "tradelocker_account_id",
+            name="uq_tradingaccount_owner_tlacct",
+        ),
+    )
+
+
+class AccountAccessRole(str, enum.Enum):
+    """Roles a grant can confer on a trading account.
+
+    trader → may place orders, modify SL/TP, close positions, see state
+    viewer → may see state + positions but NOT place / modify / close
+    """
+    trader = "trader"
+    viewer = "viewer"
+
+
+class AccountAccessGrant(Base):
+    """Authorization grant: `grantee_user_id` may act on `account_id` with `role`.
+
+    Owner-self access is implicit (the owner doesn't need a grant on his own
+    account); this table is for delegating to OTHER users.
+
+    Lifecycle:
+      - Created by the account owner via /api/accounts/{id}/grants
+      - Optionally expires at `expires_at`
+      - Revoked by setting `revoked_at` (NEVER delete — preserves audit trail)
+
+    Look-up rule used by DOM endpoints:
+      may_trade(user, account) :=
+        account.owner_user_id == user.id
+        OR EXISTS grant WHERE account_id = account.id
+                       AND grantee_user_id = user.id
+                       AND role IN ('trader')
+                       AND revoked_at IS NULL
+                       AND (expires_at IS NULL OR expires_at > now())
+    """
+    __tablename__ = "account_access_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("trading_accounts.id"), index=True, nullable=False
+    )
+    grantee_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=False
+    )
+    role: Mapped[AccountAccessRole] = mapped_column(
+        Enum(AccountAccessRole), default=AccountAccessRole.trader, nullable=False
+    )
+    granted_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Per-grantee risk caps — server-side enforcement on /dom/order.
+    # NULL = no cap (uses the owner's account limits only).
+    max_lot_per_order: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_daily_loss_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Comma-separated whitelist of instrument symbols. NULL/empty = no filter.
+    allowed_instruments_csv: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
+
+
 class AuditLog(Base):
     """Append-only audit trail for security-sensitive actions.
 
@@ -296,6 +394,12 @@ class AuditLog(Base):
         ForeignKey("users.id"), index=True, nullable=True,
     )
     actor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Optional account context — set on order/position events so an owner can
+    # filter audit log by "what happened on my account #X" regardless of which
+    # user clicked the button.
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("trading_accounts.id"), index=True, nullable=True,
+    )
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     details: Mapped[str] = mapped_column(Text, default="{}")
     client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)

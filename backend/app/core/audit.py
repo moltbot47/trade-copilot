@@ -47,7 +47,16 @@ AUDIT_ACTIONS = frozenset({
     "order_placed",
     "order_rejected",
     "manual_position_close",
+    "manual_position_modify",
+    "manual_order_cancel",
+    "manual_flatten_all",
     "webhook_signature_invalid",
+    # Delegation (Phase A)
+    "trading_account_registered",
+    "trading_account_removed",
+    "access_grant_created",
+    "access_grant_revoked",
+    "access_grant_blocked",  # caps tripped
 })
 
 
@@ -58,8 +67,15 @@ def record_audit(
     action: str,
     details: Optional[dict[str, Any]] = None,
     client_ip: Optional[str] = None,
+    account_id: Optional[int] = None,
 ) -> None:
-    """Insert an AuditLog row. Best-effort; never raises."""
+    """Insert an AuditLog row. Best-effort; never raises.
+
+    `account_id` is the TradingAccount that the action affected (None for
+    user-scoped events like login). Set this on every DOM/order/position
+    event so the owner can filter their account's audit log without
+    needing to know which user clicked the button.
+    """
     try:
         row = AuditLog(
             user_id=user.id if user else None,
@@ -67,6 +83,7 @@ def record_audit(
             action=action,
             details=json.dumps(details or {}, default=str),
             client_ip=client_ip,
+            account_id=account_id,
         )
         db.add(row)
         # The caller's commit covers us. If they only flush, our row goes
