@@ -150,6 +150,14 @@ def _apply_lightweight_migrations() -> None:
         # crash at audit-commit on pre-Alembic live DBs that were stamped
         # straight to head without running 0005.
         ("audit_log", "account_id", "INTEGER DEFAULT NULL"),
+        # Partner webhooks: per-grant URL + Fernet-encrypted secret so the
+        # slippage-tracker can tee per-trade events to a partner-controlled
+        # endpoint. Mirrored as Alembic 0007. The Dockerfile doesn't copy
+        # alembic.ini into the image, so live DBs need these columns added
+        # here at boot — without them the partner_daily_summary cron loops
+        # on "no such column: partner_webhook_url" every minute.
+        ("account_access_grants", "partner_webhook_url", "TEXT DEFAULT NULL"),
+        ("account_access_grants", "partner_webhook_secret_encrypted", "TEXT DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.

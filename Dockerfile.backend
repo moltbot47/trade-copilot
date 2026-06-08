@@ -54,6 +54,14 @@ COPY --chown=app:app backend/seed_bots.py        ./seed_bots.py
 COPY --chown=app:app backend/seed_latpfn_bot.py  ./seed_latpfn_bot.py
 COPY --chown=app:app backend/seed_quant_bot.py   ./seed_quant_bot.py
 COPY --chown=app:app backend/scripts             ./scripts
+# Alembic config + migration scripts — required by the lifespan boot's
+# _run_alembic_upgrade. Without these, the function logs
+# "alembic.ini not found" and the platform falls back entirely to the
+# lightweight column-add path in _apply_lightweight_migrations (only
+# safe for ADD COLUMN — won't create new tables we haven't already
+# defined in models.py + caught by Base.metadata.create_all).
+COPY --chown=app:app backend/alembic.ini  ./alembic.ini
+COPY --chown=app:app backend/migrations   ./migrations
 
 # Persistent SQLite mount point
 RUN mkdir -p /app/data && chown -R app:app /app
