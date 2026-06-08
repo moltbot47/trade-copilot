@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.tradelocker_auth import call_with_refresh
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
 from app.db.models import Execution, Signal, TradeOutcome, User
+from app.monitoring import slippage_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +95,29 @@ class PositionMonitor:
         entry_price: float,
         side: str,
         opened_at: Optional[datetime] = None,
+        *,
+        slippage_record_id: Optional[int] = None,
+        expected_exit_price: Optional[float] = None,
     ) -> None:
+        """Begin tracking an execution. MFE/MAE high-water marks update on
+        each poll until the position disappears from the broker.
+
+        ``slippage_record_id`` links this tracked execution to a row in
+        slippage_records (Task #4). When the position closes, finalize_record
+        is invoked with the computed exit slippage and P&L so the partner
+        audit has end-to-end backtest-vs-live data per trade. Older callers
+        that don't supply it skip the slippage finalize, preserving the
+        existing copy-runner behavior exactly.
+        """
         self._tracking[execution.id] = {
             "mae": 0.0,
             "mfe": 0.0,
             "entry": float(entry_price),
             "side": side,
             "opened_at": opened_at or datetime.utcnow(),
+            "peak": float(entry_price),
+            "slippage_record_id": slippage_record_id,
+            "expected_exit_price": expected_exit_price,
         }
 
     async def poll_and_close(self) -> list[TradeOutcome]:
@@ -191,6 +208,13 @@ class PositionMonitor:
                             delta = -delta
                         track["mfe"] = max(track["mfe"], delta)
                         track["mae"] = min(track["mae"], delta)
+                        # Track peak price (highest for long, lowest for
+                        # short) for the slippage tracker's trailing-stop
+                        # exit-slippage calc.
+                        if track["side"] == "buy":
+                            track["peak"] = max(track["peak"], cur)
+                        else:
+                            track["peak"] = min(track["peak"], cur)
                         continue
 
                     # Position closed → build TradeOutcome
@@ -278,6 +302,37 @@ class PositionMonitor:
         # Push closed-trade event onto the WS event bus for the user that
         # owns this execution. Best-effort — never raises.
         _ws_publish_trade(ex.user_id, outcome)
+
+        # ---- Slippage tracker: phase 3 of 3 (close) -------------------
+        # finalize_record updates the row created at signal-emit time with
+        # exit slippage + edge-erosion P&L. Only fires when the original
+        # entry path called track() with a slippage_record_id (i.e. came
+        # from a runner that opted into audit tracking — partner audit
+        # path). Copy-runner legacy paths leave slippage_record_id=None
+        # and skip silently.
+        slip_id = track.get("slippage_record_id")
+        if slip_id is not None:
+            # exit_type: if MFE dominated, the trailing stop fired (won).
+            # If MAE dominated, the hard stop fired (lost). Sometimes the
+            # broker closes for other reasons (manual, margin call); we
+            # don't know which from track alone, so the heuristic mirrors
+            # what _close_outcome already does for exit_price.
+            exit_type = "trailing" if track["mfe"] >= abs(track["mae"]) else "hard_stop"
+            try:
+                slippage_tracker.finalize_record(
+                    slip_id,
+                    exit_type=exit_type,
+                    actual_exit_price=float(exit_price),
+                    expected_exit_price=track.get("expected_exit_price"),
+                    peak_price=track.get("peak"),
+                    closed_ts=closed_at,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "slippage_tracker.finalize_record failed for exec=%s: %s",
+                    ex.id,
+                    exc,
+                )
         return outcome
 
 

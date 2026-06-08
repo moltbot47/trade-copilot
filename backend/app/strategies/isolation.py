@@ -45,6 +45,7 @@ from app.db.models import (
     StrategyType,
     User,
 )
+from app.monitoring import slippage_tracker
 from app.strategies.base import StrategySignal
 from app.strategies.data_feed import BarFetcher
 from app.strategies.latpfn_client import LaTPFNClient
@@ -85,6 +86,10 @@ class IsolatedRunner:
         self.bot_id: int = -1
         self.timeframe: str = "1m"
         self.symbols: list[str] = []
+        # Used by the slippage tracker. Set on start() to the bot's slug
+        # (e.g. "velocity_spike") so audit rows are keyed by a human-readable
+        # strategy name, not a numeric bot_id.
+        self.strategy_name: str = ""
         self.task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
 
@@ -120,6 +125,7 @@ class IsolatedRunner:
                 )
             runner.bot_id = sa.bot_id
             runner.timeframe = sa.timeframe or "1m"
+            runner.strategy_name = bot.slug or f"bot-{sa.bot_id}"
             runner.symbols = [
                 s.strip().upper()
                 for s in (bot.instruments_csv or "").split(",")
@@ -313,6 +319,13 @@ class IsolatedRunner:
                 if bool(getattr(bars, "attrs", {}).get("synthetic", False)):
                     continue
                 signal_obj = await strategy.on_bar(symbol, bars)
+                # Capture bar_close_ts now — used as the audit reference
+                # for every latency component downstream. Tolerate index
+                # types other than DatetimeIndex by falling back to utcnow().
+                try:
+                    bar_close_ts = bars.index[-1].to_pydatetime().replace(tzinfo=None)
+                except Exception:
+                    bar_close_ts = datetime.utcnow()
             except Exception as exc:
                 logger.warning(
                     "iso bot=%s symbol=%s failed: %s",
@@ -332,6 +345,8 @@ class IsolatedRunner:
                         token,
                         acc_num,
                         user_id,
+                        bar_close_ts,
+                        float(bars["close"].iloc[-1]),
                     )
                 except Exception as exc:
                     logger.warning(
@@ -357,6 +372,8 @@ class IsolatedRunner:
         token: str,
         acc_num: str,
         user_id: int,
+        bar_close_ts: datetime,
+        bar_close_price: float,
     ) -> None:
         db = self.db_session_factory()
         try:
@@ -395,6 +412,45 @@ class IsolatedRunner:
         finally:
             db.close()
 
+        # ---- Slippage tracker: phase 1 of 3 (signal emit) -------------
+        # Best-effort: if the strategy populated the audit fields use them;
+        # otherwise derive hard_stop_distance from the price/stop pair and
+        # fall back to entry_price for expected_entry_price. Partner
+        # strategies set the fields explicitly per the spec doc.
+        expected_entry = (
+            sig.expected_entry_price
+            if sig.expected_entry_price
+            else float(sig.entry_price)
+        )
+        hard_stop_dist = (
+            sig.hard_stop_distance_pts
+            if sig.hard_stop_distance_pts
+            else abs(float(sig.entry_price) - float(sig.stop_loss))
+        )
+        try:
+            slippage_record_id: Optional[int] = slippage_tracker.record_entry_signal(
+                user_id=user_id,
+                strategy_name=self.strategy_name,
+                account_id=account_id,
+                symbol=sig.symbol,
+                side=sig.side,
+                bar_close_ts=bar_close_ts,
+                bar_close_price=bar_close_price,
+                expected_entry_price=expected_entry,
+                hard_stop_distance_pts=hard_stop_dist,
+                trailing_stop_distance_pts=sig.trailing_stop_distance_pts,
+                early_stop_condition=sig.early_stop_condition,
+                execution_id=execution_id,
+                extra=sig.extra,
+            )
+        except Exception as exc:  # never block the trade if tracker errors
+            logger.warning(
+                "iso bot=%s slippage_tracker.record_entry_signal failed: %s",
+                self.bot_id,
+                exc,
+            )
+            slippage_record_id = None
+
         # clientOrderId doubles as the audit tag (identifies the isolated
         # account) AND the idempotency key. Bucketed to 60s so a transient
         # retry within the same bar can't open a second position.
@@ -403,6 +459,7 @@ class IsolatedRunner:
             f"iso-{self.bot_id}-acct{self.strategy_account_id}-"
             f"{sig.symbol}-{sig.side}-{bucket}"
         )
+        order_submit_ts = datetime.utcnow()
         order = await client.place_order(
             account_id=account_id,
             token=token,
@@ -414,7 +471,32 @@ class IsolatedRunner:
             tp=sig.take_profit,
             client_order_id=client_order_id,
         )
+        order_ack_ts = datetime.utcnow()
         order_id = str(order.get("order_id") or "")
+
+        # ---- Slippage tracker: phase 2 of 3 (fill confirmed) ---------
+        # TradeLocker's place_order response doesn't include a fill price —
+        # the broker assigns it server-side. Use sig.entry_price as our
+        # best estimate (which is what the existing Execution row uses
+        # anyway). When the reconciliation pipeline pulls the broker's
+        # canonical fill record later, this can be corrected.
+        if slippage_record_id is not None:
+            try:
+                slippage_tracker.record_fill(
+                    slippage_record_id,
+                    actual_entry_price=float(sig.entry_price),
+                    order_submit_ts=order_submit_ts,
+                    order_ack_ts=order_ack_ts,
+                    fill_ts=order_ack_ts,
+                    broker_response=order.get("raw") if isinstance(order, dict) else None,
+                    execution_id=execution_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "iso bot=%s slippage_tracker.record_fill failed: %s",
+                    self.bot_id,
+                    exc,
+                )
 
         # Resolve the broker position id so PositionMonitor can detect close.
         # Compact version of the copy-runner's resolution: match by
@@ -458,8 +540,19 @@ class IsolatedRunner:
                 ex.executed_lot_size = sig.qty
                 ex.fill_price = sig.entry_price
                 db.commit()
+                # Pass slippage_record_id so PositionMonitor can finalize
+                # the audit row when the position closes (phase 3 of 3).
                 position_monitor.track(
-                    ex, sig.entry_price, sig.side, datetime.utcnow()
+                    ex,
+                    sig.entry_price,
+                    sig.side,
+                    datetime.utcnow(),
+                    slippage_record_id=slippage_record_id,
+                    expected_exit_price=(
+                        sig.entry_price + sig.trailing_stop_distance_pts
+                        if sig.side.lower() == "buy"
+                        else sig.entry_price - sig.trailing_stop_distance_pts
+                    ),
                 )
             self._mark_state(last_signal_at=datetime.utcnow())
         finally:
