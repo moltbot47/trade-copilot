@@ -447,6 +447,39 @@ def test_demo_autostart_bad_upload_does_not_burn_invite(
     assert db_session.get(PartnerInvite, inv["id"]).used_at is None
 
 
+def test_update_instruments_on_approved_bot(
+    client, auth_headers, db_session, owner_account, monkeypatch
+):
+    async def _noop_start(*args, **kwargs):
+        class _R:
+            bot_id = 0
+            symbols = ["NAS100", "US30", "XAUUSD"]
+            task = None
+        return _R()
+
+    monkeypatch.setattr("app.strategies.isolation.IsolatedRunner.start", _noop_start)
+    monkeypatch.setattr("app.strategies.isolation.get_iso_runner", lambda b: None)
+
+    inv = client.post(
+        "/api/partner-invites",
+        json={"label": "x", "trading_account_id": owner_account.id, "auto_start": True},
+        headers=auth_headers,
+    ).json()
+    sid = _submit_source(client, inv["token"]).json()["submission_id"]
+
+    res = client.post(
+        f"/api/partner-submissions/{sid}/instruments",
+        json={"instruments_csv": "nas100, us30 ,XAUUSD,US30", "restart": True},
+        headers=auth_headers,
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    # normalized: upper-cased + de-duped, order preserved
+    assert body["instruments"] == "NAS100,US30,XAUUSD"
+    bot = db_session.get(Bot, body["bot_id"])
+    assert bot.instruments_csv == "NAS100,US30,XAUUSD"
+
+
 def test_reject_marks_rejected(client, auth_headers, db_session):
     inv = _create_invite(client, auth_headers)
     sid = _submit_source(client, inv["token"]).json()["submission_id"]

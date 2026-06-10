@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Optional
@@ -742,3 +743,90 @@ def reject_submission(
     )
     db.commit()
     return {"status": "rejected", "submission_id": sub.id}
+
+
+class InstrumentsIn(BaseModel):
+    # Comma-separated symbols, e.g. "NAS100,US30,XAUUSD".
+    instruments_csv: str = Field(..., min_length=1, max_length=512)
+    # Restart the isolated runner so it picks up the new symbol set now.
+    restart: bool = True
+
+
+@router.post("/partner-submissions/{submission_id}/instruments")
+async def set_instruments(
+    submission_id: int,
+    payload: InstrumentsIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Update which instruments an approved partner strategy scans + trades.
+
+    The strategy is instrument-agnostic — the runner ticks on_bar() for every
+    symbol in the bot's list. Updating the list (and restarting the isolated
+    runner) makes it scan the new set. Owner-only.
+    """
+    sub = db.get(PartnerSubmission, submission_id)
+    if sub is None:
+        raise HTTPException(404, "submission not found")
+    if sub.status != "approved" or not sub.approved_bot_id:
+        raise HTTPException(409, "submission is not approved / has no bot")
+    bot = db.get(Bot, sub.approved_bot_id)
+    if bot is None:
+        raise HTTPException(404, "bot not found")
+
+    # Normalize: upper-case, strip, de-dupe, preserve order.
+    symbols: list[str] = []
+    for raw in payload.instruments_csv.split(","):
+        s = raw.strip().upper()
+        if s and s not in symbols:
+            symbols.append(s)
+    if not symbols:
+        raise HTTPException(400, "no valid instruments provided")
+
+    bot.instruments_csv = ",".join(symbols)
+    sub.instruments_csv = bot.instruments_csv
+    record_audit(
+        db, user=user, action="partner_instruments_updated",
+        details={"submission_id": sub.id, "bot_id": bot.id, "instruments": bot.instruments_csv},
+        client_ip=_client_ip(request),
+    )
+    db.commit()
+
+    restarted = False
+    running = False
+    live_symbols = symbols
+    if payload.restart:
+        from app.strategies.isolation import IsolatedRunner, get_iso_runner
+
+        existing = get_iso_runner(bot.id)
+        if existing is not None:
+            await existing.stop()
+        sa = (
+            db.query(StrategyAccount)
+            .filter(
+                StrategyAccount.bot_id == bot.id,
+                StrategyAccount.is_active.is_(True),
+            )
+            .first()
+        )
+        if sa is not None:
+            try:
+                runner = await IsolatedRunner.start(
+                    SessionLocal, sa.id,
+                    latpfn_endpoint=os.getenv("LATPFN_ENDPOINT_URL") or None,
+                )
+                restarted = True
+                live_symbols = runner.symbols
+                running = runner.task is not None and not runner.task.done()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("set_instruments: runner restart failed: %s", exc)
+
+    return {
+        "status": "updated",
+        "bot_id": bot.id,
+        "instruments": bot.instruments_csv,
+        "restarted": restarted,
+        "running": running,
+        "symbols": live_symbols,
+    }
