@@ -227,6 +227,28 @@ export default function InvitePage() {
               </>
             )}
           </p>
+          <a
+            href="/partner"
+            style={{
+              display: "inline-block",
+              marginTop: 20,
+              padding: "12px 20px",
+              background: C.accent,
+              color: C.bg,
+              borderRadius: 4,
+              fontFamily: mono,
+              fontWeight: 700,
+              fontSize: 14,
+              textDecoration: "none",
+            }}
+          >
+            View your dashboard →
+          </a>
+          <p style={{ color: C.dim, fontSize: 12, marginTop: 10 }}>
+            Sign in with{" "}
+            <code style={{ color: C.text }}>{partnerEmail || "your email"}</code>{" "}
+            to watch its live performance, fills, and slippage.
+          </p>
         </div>
       </div>
     );
