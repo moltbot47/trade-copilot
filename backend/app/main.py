@@ -159,6 +159,11 @@ def _apply_lightweight_migrations() -> None:
         # on "no such column: partner_webhook_url" every minute.
         ("account_access_grants", "partner_webhook_url", "TEXT DEFAULT NULL"),
         ("account_access_grants", "partner_webhook_secret_encrypted", "TEXT DEFAULT NULL"),
+        # Partner strategy onboarding (Alembic 0009). New tables come from
+        # create_all, but these columns on EXISTING tables don't — mirror them
+        # here so live SQLite DBs get them at boot even without alembic.ini.
+        ("bots", "strategy_slug", "VARCHAR(64) DEFAULT NULL"),
+        ("strategy_state", "config_json", "TEXT DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
