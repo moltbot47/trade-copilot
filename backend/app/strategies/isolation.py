@@ -34,7 +34,6 @@ from typing import Optional
 
 from app.core.crypto import decrypt
 from app.core.tradelocker_client import TradeLockerClient
-from app.db.database import SessionLocal
 from app.db.models import (
     Bot,
     Execution,
@@ -42,7 +41,6 @@ from app.db.models import (
     Signal,
     StrategyAccount,
     StrategyState,
-    StrategyType,
     User,
 )
 from app.integrations import partner_webhook
@@ -50,17 +48,18 @@ from app.monitoring import slippage_tracker
 from app.strategies.base import StrategySignal
 from app.strategies.data_feed import BarFetcher
 from app.strategies.latpfn_client import LaTPFNClient
-from app.strategies.momentum import LatPFNMomentumStrategy
 from app.strategies.position_monitor import PositionMonitor
-from app.strategies.quant_strategy import LatPFNQuantStrategy
+from app.strategies.registry import (
+    StrategyContext,
+    build_strategy,
+    is_registered,
+)
 from app.strategies.runner import tf_seconds
 
 logger = logging.getLogger(__name__)
 
 # Registry keyed by bot_id — the isolation unit is per bot/strategy.
 _ISO_RUNNERS: dict[int, "IsolatedRunner"] = {}
-
-_SUPPORTED = (StrategyType.latpfn_momentum, StrategyType.latpfn_quant)
 
 
 def get_iso_runner(bot_id: int) -> Optional["IsolatedRunner"]:
@@ -118,10 +117,14 @@ class IsolatedRunner:
             bot = db.get(Bot, sa.bot_id)
             if bot is None or not getattr(bot, "is_active", True):
                 raise ValueError(f"bot {sa.bot_id} not found/inactive")
-            if bot.strategy_type not in _SUPPORTED:
+            strat_key = bot.strategy_slug or bot.strategy_type.value
+            if not is_registered(strat_key):
+                # Built-in LaT-PFN strategies are always registered. A partner
+                # strategy must be approved + loaded first; webhook-driven bots
+                # (orb/squeeze/stoch_hook/news_event) are never registered here.
                 raise ValueError(
-                    f"isolation harness supports {[s.value for s in _SUPPORTED]}; "
-                    f"bot {bot.id} is {bot.strategy_type.value} "
+                    f"isolation harness supports registered strategies only; "
+                    f"strategy {strat_key!r} is not loaded "
                     "(webhook-driven bots run via /api/webhooks)"
                 )
             runner.bot_id = sa.bot_id
@@ -283,21 +286,34 @@ class IsolatedRunner:
                 if state and state.confidence_threshold
                 else 0.8
             )
-            is_quant = bot is not None and (
-                bot.strategy_type == StrategyType.latpfn_quant
+            strat_key = (
+                bot.strategy_slug or bot.strategy_type.value
+                if bot is not None
+                else "latpfn_momentum"
             )
+            # Partner strategies read their tunable config from
+            # StrategyState.config_json (so they can be re-tuned without a
+            # redeploy). Built-in strategies ignore params.
+            params: dict = {}
+            raw_cfg = getattr(state, "config_json", None) if state else None
+            if raw_cfg:
+                try:
+                    params = json.loads(raw_cfg) or {}
+                except (ValueError, TypeError):
+                    params = {}
         finally:
             db.close()
 
-        common = dict(
-            bot_id=self.bot_id,
-            timeframe=self.timeframe,
-            latpfn_client=latpfn_client,
-            threshold=threshold,
+        return build_strategy(
+            strat_key,
+            StrategyContext(
+                bot_id=self.bot_id,
+                timeframe=self.timeframe,
+                latpfn_client=latpfn_client,
+                threshold=threshold,
+                params=params,
+            ),
         )
-        if is_quant:
-            return LatPFNQuantStrategy(**common)
-        return LatPFNMomentumStrategy(**common)
 
     async def _tick(
         self,

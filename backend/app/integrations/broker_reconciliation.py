@@ -273,9 +273,8 @@ def compute_discrepancies(
             for p in broker_positions:
                 if not isinstance(p, dict):
                     continue
-                p_side = str(p.get("side", "")).lower()
-                p_sym = ""  # broker positions only carry tradableInstrumentId,
-                # not the symbol string. The diff stays approximate without a
+                # Broker positions only carry tradableInstrumentId, not the
+                # symbol string. The diff stays approximate without a
                 # tradable-id→symbol map (Phase 2 — needs an instruments
                 # cache). For now we flag any broker position with no matching
                 # open record by COUNT not by symbol.

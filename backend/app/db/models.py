@@ -33,6 +33,12 @@ class StrategyType(str, enum.Enum):
     latpfn_momentum = "latpfn_momentum"
     latpfn_quant = "latpfn_quant"
     news_event = "news_event"
+    # Partner-delivered strategy. Dispatch happens through the strategy
+    # registry keyed by Bot.strategy_slug, NOT this enum value — so a partner
+    # bot is deliberately rejected by /strategy/start and /strategy/analyze
+    # (which only accept the two LaT-PFN types). Partner bots run via the
+    # isolation harness only. See app/strategies/registry.py.
+    partner = "partner"
 
 
 class CohortStatus(str, enum.Enum):
@@ -133,6 +139,11 @@ class Bot(Base):
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     strategy_type: Mapped[StrategyType] = mapped_column(Enum(StrategyType), nullable=False)
+    # Partner strategies dispatch by slug through the strategy registry
+    # instead of the fixed StrategyType enum. NULL for built-in bots
+    # (dispatch falls back to strategy_type.value). For partner bots this is
+    # the unique registry key (e.g. "velocity_spike").
+    strategy_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     backtest_win_rate: Mapped[float] = mapped_column(Float, default=0.0)
     backtest_profit_factor: Mapped[float] = mapped_column(Float, default=0.0)
     risk_level: Mapped[int] = mapped_column(Integer, default=3)  # 1-5
@@ -223,6 +234,10 @@ class StrategyState(Base):
     last_signal_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Tunable strategy params as a JSON string. Partner strategies read this
+    # as their ``params`` kwarg (registry.StrategyContext.params), so a
+    # partner module can be re-tuned without a redeploy. NULL/empty => {}.
+    config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -766,3 +781,121 @@ class SlippageRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+def _generate_invite_token() -> str:
+    """Default factory for PartnerInvite.token — 256 bits of url-safe entropy."""
+    return secrets.token_urlsafe(32)
+
+
+class PartnerInvite(Base):
+    """A single-use, owner-issued link a strategy partner uses to submit.
+
+    The owner creates one of these (`POST /api/partner-invites`), sends the
+    URL (`/invite/<token>`) to the partner, and the partner uploads their
+    strategy + metadata against it WITHOUT needing an account or any of the
+    owner's data. One invite yields at most one submission: `used_at` is
+    stamped the moment a submission is created, and the public submit route
+    rejects a used/expired/revoked token.
+    """
+    __tablename__ = "partner_invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+        default=_generate_invite_token,
+    )
+    label: Mapped[str] = mapped_column(String(120), default="")
+    # Optional pre-fill so the upload form can show "Hi, <name>".
+    partner_name_hint: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    partner_email_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=False
+    )
+    # The TradingAccount this invite is pre-bound to. When set, the partner
+    # runs against THIS account (not an arbitrary one). NULL = owner picks an
+    # account at approval time (the manual flow).
+    trading_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("trading_accounts.id"), nullable=True
+    )
+    # When True AND the bound account is a DEMO account, a passing submission
+    # is provisioned + started INSTANTLY with no owner approval. Hard-gated to
+    # demo: a live account always falls back to manual approval. The owner
+    # flips a strategy to live themselves from the backend after watching demo.
+    auto_start: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Stamped when a submission is created against this invite (single-use).
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    submissions: Mapped[list["PartnerSubmission"]] = relationship(
+        back_populates="invite"
+    )
+
+
+class PartnerSubmission(Base):
+    """What a partner uploaded through an invite, pending owner approval.
+
+    `delivery_type` is "source" (an uploaded ``.py`` module, AST-scanned and
+    stored in `source_code`) or "http" (an external endpoint we POST bars to,
+    stored in `endpoint_url` + encrypted `endpoint_secret`). Nothing here runs
+    until the owner approves it — approval registers the strategy in the
+    runtime registry, creates a partner `Bot`, and issues the scoped
+    viewer `AccountAccessGrant`.
+    """
+    __tablename__ = "partner_submissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invite_id: Mapped[int] = mapped_column(
+        ForeignKey("partner_invites.id"), index=True, nullable=False
+    )
+
+    # Who + what
+    partner_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    partner_email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    strategy_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Unique registry key (slugified from strategy_name); the approved Bot's
+    # strategy_slug. Enforced unique so two partners can't collide.
+    strategy_slug: Mapped[str] = mapped_column(
+        String(64), index=True, nullable=False
+    )
+    instruments_csv: Mapped[str] = mapped_column(String(512), default="NAS100")
+    timeframe: Mapped[str] = mapped_column(String(8), default="1m")
+    params_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    backtest_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Delivery — exactly one of (source_code) or (endpoint_url) is set.
+    delivery_type: Mapped[str] = mapped_column(String(8), nullable=False)  # source|http
+    source_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    endpoint_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # HMAC secret the partner signs with — encrypted at rest (Fernet), same as
+    # broker tokens. Decrypted only when the proxy strategy signs a request.
+    endpoint_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Static-analysis verdict for a source upload (JSON: {ok, findings:[...]}).
+    ast_scan_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Review lifecycle
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending", index=True, nullable=False
+    )  # pending|approved|rejected
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set on approval — the partner Bot created from this submission.
+    approved_bot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bots.id"), nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    invite: Mapped["PartnerInvite"] = relationship(back_populates="submissions")

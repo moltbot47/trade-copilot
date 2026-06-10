@@ -186,3 +186,58 @@ export interface StrategyStatusResponse {
 export interface StrategyEquityResponse {
   points: EquityPoint[];
 }
+
+// --- Partner onboarding ------------------------------------------------- //
+export interface PartnerInvite {
+  id: number;
+  token: string;
+  url_path: string;
+  label: string;
+  partner_name_hint: string | null;
+  partner_email_hint: string | null;
+  trading_account_id: number | null;
+  account_label: string | null;
+  account_env: string | null;
+  auto_start: boolean;
+  state: "active" | "used" | "expired" | "revoked";
+  created_at: string | null;
+  expires_at: string | null;
+  used_at: string | null;
+  submission_id: number | null;
+}
+
+export interface AstFinding {
+  level: "block" | "warn";
+  code: string;
+  message: string;
+  line: number;
+}
+
+export interface PartnerSubmission {
+  id: number;
+  invite_id: number;
+  partner_name: string;
+  partner_email: string;
+  strategy_name: string;
+  strategy_slug: string;
+  instruments_csv: string;
+  timeframe: string;
+  params_json: string | null;
+  backtest_notes: string | null;
+  delivery_type: "source" | "http";
+  endpoint_url: string | null;
+  source_filename: string | null;
+  has_source: boolean;
+  source_code?: string | null;
+  ast_scan: {
+    ok: boolean;
+    strategy_class: string | null;
+    declared_name: string | null;
+    findings: AstFinding[];
+  } | null;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason: string | null;
+  approved_bot_id: number | null;
+  created_at: string | null;
+  reviewed_at: string | null;
+}

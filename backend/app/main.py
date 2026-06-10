@@ -20,6 +20,7 @@ from app.api import (
     isolation,
     mfa,
     partner,
+    partner_onboarding,
     subscriptions,
     tradelocker,
     users,
@@ -158,6 +159,11 @@ def _apply_lightweight_migrations() -> None:
         # on "no such column: partner_webhook_url" every minute.
         ("account_access_grants", "partner_webhook_url", "TEXT DEFAULT NULL"),
         ("account_access_grants", "partner_webhook_secret_encrypted", "TEXT DEFAULT NULL"),
+        # Partner strategy onboarding (Alembic 0009). New tables come from
+        # create_all, but these columns on EXISTING tables don't — mirror them
+        # here so live SQLite DBs get them at boot even without alembic.ini.
+        ("bots", "strategy_slug", "VARCHAR(64) DEFAULT NULL"),
+        ("strategy_state", "config_json", "TEXT DEFAULT NULL"),
     ]
     # StrategyTickLog auto-archive: keep only the most recent N rows per
     # (bot, timeframe). Cheap on every boot.
@@ -441,6 +447,19 @@ async def lifespan(_: FastAPI):
         logger.warning("seed_starter_bots failed: %s", exc)
     _seed_advanced_bots()
 
+    # Re-register approved partner strategies into the runtime registry so
+    # they survive restarts (the DB row is the source of truth, not a file).
+    try:
+        from app.db.database import SessionLocal as _SL
+        from app.strategies import partner_loader as _pl
+        _db = _SL()
+        try:
+            _pl.load_all_approved(_db)
+        finally:
+            _db.close()
+    except Exception as exc:  # never crash boot on a bad partner strategy
+        logger.warning("load_all_approved partner strategies failed: %s", exc)
+
     refresh_task = _aio.create_task(_periodic_token_refresh_task())
 
     # Position reconciliation — periodic DB↔broker drift detection.
@@ -586,6 +605,7 @@ app.include_router(isolation.router, prefix="/api")
 app.include_router(calculator.router, prefix="/api")
 app.include_router(accounts.router, prefix="/api")
 app.include_router(partner.router, prefix="/api")
+app.include_router(partner_onboarding.router, prefix="/api")
 
 # WebSocket endpoint — protocol uses /ws (no /api prefix per WS_PROTOCOL.md).
 app.include_router(ws_router)

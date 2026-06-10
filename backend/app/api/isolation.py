@@ -25,16 +25,19 @@ from app.db.database import SessionLocal, get_db
 from app.db.models import (
     Bot,
     StrategyAccount,
-    StrategyType,
     TradeOutcome,
     User,
 )
 from app.strategies.isolation import IsolatedRunner, get_iso_runner
+from app.strategies.registry import is_registered
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/isolation", tags=["isolation"])
 
-_SUPPORTED = (StrategyType.latpfn_momentum, StrategyType.latpfn_quant)
+
+def _bot_strategy_key(bot: Bot) -> str:
+    """Dispatch key for a bot — partner slug if set, else the enum value."""
+    return bot.strategy_slug or bot.strategy_type.value
 
 
 # --------------------------------------------------------------------- #
@@ -107,11 +110,11 @@ async def register_account(
     bot = db.get(Bot, req.bot_id)
     if bot is None or not getattr(bot, "is_active", True):
         raise HTTPException(404, "bot not found or inactive")
-    if bot.strategy_type not in _SUPPORTED:
+    if not is_registered(_bot_strategy_key(bot)):
         raise HTTPException(
             400,
-            f"isolation supports {[s.value for s in _SUPPORTED]}; "
-            f"bot is {bot.strategy_type.value} (webhook-driven)",
+            f"isolation supports registered strategies only; "
+            f"strategy {_bot_strategy_key(bot)!r} is not loaded (webhook-driven)",
         )
     if not user.tradelocker_token:
         raise HTTPException(400, "no broker linked")
