@@ -525,6 +525,7 @@ class IsolatedRunner:
         # Compact version of the copy-runner's resolution: match by
         # orderId/strategyId, else newest position on this symbol+side.
         pos_id: Optional[str] = None
+        pos_obj: Optional[dict] = None
         try:
             positions = await client.get_positions(account_id, token, acc_num)
             for p in positions:
@@ -532,6 +533,7 @@ class IsolatedRunner:
                 p_strat = str(p.get("strategyId") or p.get("strategy_id") or "")
                 if order_id and (p_order == order_id or p_strat == order_id):
                     pos_id = str(p.get("id"))
+                    pos_obj = p
                     break
             if pos_id is None:
                 same = [
@@ -546,13 +548,75 @@ class IsolatedRunner:
                 except Exception:
                     pass
                 if same:
-                    pos_id = str(same[0].get("id"))
+                    pos_obj = same[0]
+                    pos_id = str(pos_obj.get("id"))
         except Exception as exc:
             logger.warning(
                 "iso bot=%s could not resolve position id: %s",
                 self.bot_id,
                 exc,
             )
+
+        # ---- SL/TP verify + repair --------------------------------------
+        # Genesis FX silently DROPS stopLoss/takeProfit sent in a market
+        # order's body (order still fills 200 OK), leaving a naked position
+        # (stopLossId/takeProfitId == None). The copy-runner repairs this via
+        # modify_position; the isolation runner must do the same or partner
+        # positions run with no risk management. If the level still won't
+        # attach (too close to price, etc.), close defensively — better flat
+        # than uncovered. stopLossId/takeProfitId are the ID-suffixed fields
+        # (IDs of internal child orders), NOT stopLoss/takeProfit.
+        if pos_id and pos_obj is not None:
+            needs_sl = sig.stop_loss is not None and not pos_obj.get("stopLossId")
+            needs_tp = sig.take_profit is not None and not pos_obj.get("takeProfitId")
+            if needs_sl or needs_tp:
+                logger.warning(
+                    "iso bot=%s broker dropped sl/tp → repairing pos=%s (needs_sl=%s needs_tp=%s)",
+                    self.bot_id, pos_id, needs_sl, needs_tp,
+                )
+                repaired = False
+                try:
+                    await client.modify_position(
+                        pos_id, token=token, acc_num=acc_num,
+                        stop_loss=sig.stop_loss if needs_sl else None,
+                        take_profit=sig.take_profit if needs_tp else None,
+                    )
+                    fresh = await client.get_positions(account_id, token, acc_num)
+                    fp = next((p for p in fresh if str(p.get("id")) == pos_id), None)
+                    still_missing = fp is None or (
+                        (needs_sl and not fp.get("stopLossId"))
+                        or (needs_tp and not fp.get("takeProfitId"))
+                    )
+                    repaired = not still_missing
+                except Exception as exc:
+                    logger.error(
+                        "iso bot=%s SL/TP repair failed pos=%s: %s",
+                        self.bot_id, pos_id, exc,
+                    )
+                if not repaired:
+                    logger.error(
+                        "iso bot=%s SL/TP could not attach pos=%s — closing defensively",
+                        self.bot_id, pos_id,
+                    )
+                    try:
+                        await client.close_position(pos_id, token=token, acc_num=acc_num)
+                    except Exception as exc2:
+                        logger.exception(
+                            "iso bot=%s emergency close failed pos=%s: %s",
+                            self.bot_id, pos_id, exc2,
+                        )
+                    db = self.db_session_factory()
+                    try:
+                        ex = db.get(Execution, execution_id)
+                        if ex is not None:
+                            ex.status = ExecutionStatus.rejected
+                            db.commit()
+                    finally:
+                        db.close()
+                    self._mark_state(
+                        last_error=f"SL/TP could not attach on {sig.symbol}; closed defensively",
+                    )
+                    return
 
         db = self.db_session_factory()
         try:
