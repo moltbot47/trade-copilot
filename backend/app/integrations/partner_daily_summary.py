@@ -20,23 +20,19 @@ worst). For persistent dedup across restarts, see TODO in maybe_publish().
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import time
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-import httpx
-from sqlalchemy import and_, or_
+from sqlalchemy import or_
 
 from app.core.crypto import decrypt
 from app.db.database import SessionLocal
 from app.db.models import (
     AccountAccessGrant,
     TradingAccount,
-    User,
 )
 from app.integrations.partner_webhook import (
     _is_discord_url,

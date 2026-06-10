@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date as date_cls, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -39,7 +39,6 @@ from app.core.tradelocker_auth import call_with_refresh
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
 from app.db.database import get_db
 from app.db.models import (
-    AccountAccessGrant,
     BrokerStatement,
     SlippageRecord,
     TradingAccount,

@@ -11,6 +11,8 @@ import type {
   StrategyState,
   AdvisorResponse,
   UserOut,
+  PartnerInvite,
+  PartnerSubmission,
 } from "./types";
 
 const BASE_URL =
@@ -557,6 +559,56 @@ export const api = {
 
   // DOM (manual order ticket) client methods are parked on feature/dom.
   // When that branch is reattached, restore the dom* methods here.
+
+  // Partner onboarding (owner side) — issue invite links, review uploads,
+  // approve into a scoped viewer grant + registry-dispatched bot.
+  createPartnerInvite: (payload: {
+    label?: string;
+    partner_name_hint?: string | null;
+    partner_email_hint?: string | null;
+    expires_at?: string | null;
+    trading_account_id?: number | null;
+    auto_start?: boolean;
+  }) =>
+    request<PartnerInvite>("/api/partner-invites", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  listPartnerInvites: () => request<PartnerInvite[]>("/api/partner-invites"),
+  revokePartnerInvite: (id: number) =>
+    request<{ status: string }>(`/api/partner-invites/${id}`, {
+      method: "DELETE",
+    }),
+  listPartnerSubmissions: (status?: string) =>
+    request<{ items: PartnerSubmission[] }>(
+      `/api/partner-submissions${status ? `?status=${status}` : ""}`,
+    ),
+  getPartnerSubmission: (id: number) =>
+    request<PartnerSubmission>(`/api/partner-submissions/${id}`),
+  approvePartnerSubmission: (
+    id: number,
+    payload: {
+      account_id: number;
+      expires_at?: string | null;
+      allowed_instruments_csv?: string | null;
+    },
+  ) =>
+    request<{
+      status: string;
+      bot_id: number;
+      bot_slug: string;
+      grant_id: number;
+      partner_user_id: number;
+      next_step: string;
+    }>(`/api/partner-submissions/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  rejectPartnerSubmission: (id: number, reason: string) =>
+    request<{ status: string }>(`/api/partner-submissions/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 
   // Partner read API — drives the partner dashboard.
   partnerAccounts: () =>

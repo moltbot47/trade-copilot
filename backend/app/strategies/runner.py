@@ -40,6 +40,7 @@ from app.strategies.momentum import LatPFNMomentumStrategy
 from app.strategies.performance_tracker import PerformanceTracker
 from app.strategies.position_monitor import PositionMonitor
 from app.strategies.quant_strategy import LatPFNQuantStrategy
+from app.strategies.registry import StrategyContext, build_strategy
 from app.strategies.trade_manager import CohortCommand, TradeManager
 
 logger = logging.getLogger(__name__)
@@ -182,11 +183,14 @@ class StrategyRunner:
         client = TradeLockerClient(env=feed_user.get("env") or "demo")
         latpfn_client = LaTPFNClient(endpoint_url=self.latpfn_endpoint)
         threshold = self._current_threshold()
-        strategy = LatPFNMomentumStrategy(
-            bot_id=self.bot_id,
-            timeframe=self.timeframe,
-            latpfn_client=latpfn_client,
-            threshold=threshold,
+        strategy = build_strategy(
+            "latpfn_momentum",
+            StrategyContext(
+                bot_id=self.bot_id,
+                timeframe=self.timeframe,
+                latpfn_client=latpfn_client,
+                threshold=threshold,
+            ),
         )
         position_monitor = PositionMonitor(self.db_session_factory, client, self.bot_id, self.timeframe)
         bar_fetcher = BarFetcher(
@@ -783,11 +787,14 @@ class QuantRunner:
             feed_user.get("env"),
             threshold,
         )
-        strategy = LatPFNQuantStrategy(
-            bot_id=self.bot_id,
-            timeframe=self.timeframe,
-            latpfn_client=latpfn_client,
-            threshold=threshold,
+        strategy = build_strategy(
+            "latpfn_quant",
+            StrategyContext(
+                bot_id=self.bot_id,
+                timeframe=self.timeframe,
+                latpfn_client=latpfn_client,
+                threshold=threshold,
+            ),
         )
         bar_fetcher = BarFetcher(
             client=client,

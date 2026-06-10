@@ -42,7 +42,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from sqlalchemy import and_, or_

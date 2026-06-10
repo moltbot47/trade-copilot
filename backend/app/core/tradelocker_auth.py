@@ -21,7 +21,6 @@ from typing import Any, Awaitable, Callable, Optional, TypeVar
 from app.core.crypto import decrypt
 from app.core.tradelocker_client import TradeLockerClient, TradeLockerError
 from app.core.tradelocker_token_refresh import refresh_user_token
-from app.db import database as _db
 from app.db.database import SessionLocal  # re-exported for tests that patch it here
 from app.db.models import User
 
