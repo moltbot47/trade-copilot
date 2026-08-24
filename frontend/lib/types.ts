@@ -11,6 +11,14 @@ export type Bot = {
   strategy_type?: string;
   is_active?: boolean;
   created_at?: string;
+  // Live performance from real (demo) closed trades. Percentages match
+  // backtest_win_rate's scale (62.0 == 62%). null until the bot has trades.
+  live_win_rate?: number | null;
+  live_profit_factor?: number | null;
+  live_total_trades?: number;
+  // "live" → trust live_* fields; "backtest" → trust backtest_* fields;
+  // "none" → no data yet, show a "collecting" state rather than 0.0%.
+  stats_source?: "live" | "backtest" | "none";
 };
 
 export type Subscription = {

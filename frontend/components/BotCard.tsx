@@ -23,6 +23,72 @@ function RiskBars({ level }: { level: number }) {
   );
 }
 
+// Resolve which performance figures to display. Prefer live stats computed
+// from real (demo) trades; fall back to seeded backtest figures; otherwise
+// return null so the card shows an honest "collecting data" state instead of
+// a misleading 0.0% / 0.00.
+function resolveStats(bot: Bot): {
+  source: "live" | "backtest" | "none";
+  winRate: number | null;
+  profitFactor: number | null;
+  liveTrades: number;
+} {
+  const source =
+    bot.stats_source ??
+    ((bot.backtest_win_rate ?? 0) > 0 || (bot.backtest_profit_factor ?? 0) > 0
+      ? "backtest"
+      : "none");
+  if (source === "live") {
+    return {
+      source,
+      winRate: bot.live_win_rate ?? null,
+      profitFactor: bot.live_profit_factor ?? null,
+      liveTrades: bot.live_total_trades ?? 0,
+    };
+  }
+  if (source === "backtest") {
+    return {
+      source,
+      winRate: bot.backtest_win_rate ?? null,
+      profitFactor: bot.backtest_profit_factor ?? null,
+      liveTrades: 0,
+    };
+  }
+  return { source: "none", winRate: null, profitFactor: null, liveTrades: 0 };
+}
+
+function StatsBadge({
+  source,
+  liveTrades,
+}: {
+  source: "live" | "backtest" | "none";
+  liveTrades: number;
+}) {
+  if (source === "live") {
+    return (
+      <span
+        className="accent"
+        title={`Computed from ${liveTrades} real closed trade${liveTrades === 1 ? "" : "s"}`}
+        style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.04em" }}
+      >
+        ● LIVE · {liveTrades} trade{liveTrades === 1 ? "" : "s"}
+      </span>
+    );
+  }
+  if (source === "backtest") {
+    return (
+      <span className="dim" title="Historical backtest figures — not live results" style={{ fontSize: "0.7rem" }}>
+        backtest
+      </span>
+    );
+  }
+  return (
+    <span className="dim" title="No trades recorded yet" style={{ fontSize: "0.7rem" }}>
+      no live data yet
+    </span>
+  );
+}
+
 export default function BotCard({
   bot,
   brokerConnected,
@@ -30,8 +96,8 @@ export default function BotCard({
   bot: Bot;
   brokerConnected?: boolean;
 }) {
-  const winRate = bot.backtest_win_rate ?? 0;
-  const profitFactor = bot.backtest_profit_factor ?? 0;
+  const { source, winRate, profitFactor, liveTrades } = resolveStats(bot);
+  const hasStats = winRate !== null && profitFactor !== null;
   const instruments = (bot.instruments_csv ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -51,12 +117,14 @@ export default function BotCard({
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem" }}>
         <div>
-          <div className="dim">Win rate</div>
-          <div className="accent">{winRate.toFixed(1)}%</div>
+          <div className="dim" style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
+            Win rate <StatsBadge source={source} liveTrades={liveTrades} />
+          </div>
+          <div className="accent">{hasStats ? `${winRate!.toFixed(1)}%` : "—"}</div>
         </div>
         <div>
           <div className="dim">Profit factor</div>
-          <div className="accent">{profitFactor.toFixed(2)}</div>
+          <div className="accent">{hasStats ? profitFactor!.toFixed(2) : "—"}</div>
         </div>
         <div>
           <div className="dim">Risk</div>
@@ -67,6 +135,11 @@ export default function BotCard({
           <div>{instruments.join(", ") || "—"}</div>
         </div>
       </div>
+      {!hasStats && (
+        <p className="dim" style={{ margin: 0, fontSize: "0.75rem" }}>
+          Collecting live results — stats appear once this bot closes its first trades on a demo account.
+        </p>
+      )}
       <SubscribeButton bot={bot} brokerConnected={brokerConnected} />
     </article>
   );

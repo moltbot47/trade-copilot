@@ -39,6 +39,19 @@ class BotOut(BaseModel):
     instruments_csv: str
     is_active: bool
     created_at: datetime
+    # ---- Live performance, computed from real (demo) closed trades ----
+    # These reflect actual TradeOutcome rows produced by the bot running on
+    # demo accounts, so the marketplace can show real numbers instead of the
+    # seeded backtest figures. Percentages match backtest_win_rate's scale
+    # (e.g. 62.0 == 62%). None until the bot has at least one closed trade.
+    live_win_rate: Optional[float] = None
+    live_profit_factor: Optional[float] = None
+    live_total_trades: int = 0
+    # Which stats a client should trust for display:
+    #   "live"     — live_* fields are populated from real trades
+    #   "backtest" — no live trades yet, seeded backtest figures are meaningful
+    #   "none"     — neither available; show a "collecting data" state, not 0.0%
+    stats_source: str = "none"
 
 
 # ---------- Subscriptions ----------
